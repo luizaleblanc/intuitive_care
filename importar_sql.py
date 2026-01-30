@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 USER = "root"            
-PASSWORD = "Luizaferraz123*"    
+PASSWORD = "password123"    
 HOST = "localhost"
 DATABASE = "intuitive_care"
 
