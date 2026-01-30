@@ -1,5 +1,13 @@
 venv/
+env/
+.env
 __pycache__/
-*.zip
-data/raw/
+*.pyc
+.DS_Store
+Thumbs.db
+data/raw/*.csv
+data/raw/*.zip
+data/raw/*.pdf
 data/*.csv
+*.log
+.vscode/
