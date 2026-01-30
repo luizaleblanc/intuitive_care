@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Sênior - Intuitive Care</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #f0f2f5;
+        color: #333;
+      }
+      .container {
+        width: 90%;
+        max-width: 900px;
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        margin-top: 30px;
+      }
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+        color: #2c3e50;
+      }
+
+      .controls {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      select {
+        padding: 10px 20px;
+        font-size: 16px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Monitoramento de Despesas ANS</h1>
+
+      <div class="controls">
+        <label for="anoSelect">Filtrar por Ano: </label>
+        <select id="anoSelect">
+          <option value="">Todos os Anos (Acumulado)</option>
+          <option value="2023">2023</option>
+          <option value="2022">2022</option>
+          <option value="2021">2021</option>
+        </select>
+      </div>
+
+      <canvas id="meuGrafico"></canvas>
+    </div>
+
+    <script>
+      let meuChart = null;
+
+      async function carregarDados(ano = "") {
+        try {
+          let url = "http://127.0.0.1:5000/top10";
+          if (ano) {
+            url += `?ano=${ano}`;
+          }
+
+          const response = await fetch(url);
+          const dados = await response.json();
+
+          const nomes = dados.map((item) => item.razao_social || `Reg. ${item.reg_ans}`);
+          const valores = dados.map((item) => parseFloat(item.total_despesas));
+
+          if (meuChart) {
+            meuChart.destroy();
+          }
+
+          const ctx = document.getElementById("meuGrafico").getContext("2d");
+          meuChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: nomes,
+              datasets: [
+                {
+                  label: "Total de Despesas (R$)",
+                  data: valores,
+                  backgroundColor: "#3498db",
+                  borderRadius: 4,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { position: "bottom" },
+                tooltip: {
+                  callbacks: {
+                    label: function (context) {
+                      return new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      }).format(context.raw);
+                    },
+                  },
+                },
+              },
+            },
+          });
+        } catch (erro) {
+          console.error("Erro:", erro);
+          alert("Erro ao conectar na API.");
+        }
+      }
+      carregarDados();
+
+      document.getElementById("anoSelect").addEventListener("change", (event) => {
+        carregarDados(event.target.value);
+      });
+    </script>
+  </body>
+</html>
