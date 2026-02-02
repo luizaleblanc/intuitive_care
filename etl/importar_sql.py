@@ -9,44 +9,54 @@ DB_PORT = '3307'
 DB_NAME = 'intuitive_care'
 
 def importar_dados():
-    print("Iniciando importação para o Docker...")
+    print("Iniciando importação COMPLETA (Operadoras + Despesas)...")
     
     conn_string = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     engine = create_engine(conn_string)
 
-    print("Limpando tabela 'despesas' antiga...")
-    with engine.connect() as conn:
-        try:
-            conn.execute(text("DELETE FROM despesas"))
-            conn.commit()
-        except:
-            pass
-    arq_desp = 'data/despesas_enriquecidas.csv'
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    arq_csv = os.path.join(base_dir, 'data', 'despesas_enriquecidas.csv')
     
-    if os.path.exists(arq_desp):
-        print(f"Lendo {arq_desp}...")
-        df_desp = pd.read_csv(arq_desp)
+    if not os.path.exists(arq_csv):
+        print(f"ERRO: Arquivo não encontrado: {arq_csv}")
+        return
+
+    print(f"Lendo arquivo: {arq_csv}...")
+    df_geral = pd.read_csv(arq_csv)
+
+    print("Tratando dados de OPERADORAS...")
+    colunas_ops = {
+        'REG_ANS': 'reg_ans',
+        'CNPJ': 'cnpj', 
+        'RazaoSocial': 'razao_social',
+        'Modalidade': 'modalidade',
+        'UF': 'uf'
+    }
     
-        print("Ajustando nomes das colunas...")
-        df_desp = df_desp.rename(columns={
-            'REG_ANS': 'reg_ans',
-            'Trimestre': 'trimestre',
-            'Ano': 'ano',
-            'Valor Despesas': 'valor_despesa'  
-        })
-        
-        colunas_finais = ['reg_ans', 'trimestre', 'ano', 'valor_despesa']
-        
-        if set(colunas_finais).issubset(df_desp.columns):
-            df_desp = df_desp[colunas_finais]
-        
-        print(f"Salvando {len(df_desp)} linhas no MySQL...")
-        
-        df_desp.to_sql('despesas', con=engine, if_exists='replace', index=False)
-        
-        print("SUCESSO! Dados importados.")
-    else:
-        print(f"ERRO: Arquivo {arq_desp} não encontrado!")
+    cols_existentes_ops = [c for c in colunas_ops.keys() if c in df_geral.columns]
+    df_ops = df_geral[cols_existentes_ops].copy()
+    df_ops = df_ops.rename(columns=colunas_ops)
+    df_ops = df_ops.drop_duplicates(subset=['reg_ans']) 
+
+    print(f"Salvando {len(df_ops)} operadoras no MySQL...")
+    df_ops.to_sql('operadoras', con=engine, if_exists='replace', index=False)
+
+    print("Tratando dados de DESPESAS...")
+    colunas_desp = {
+        'REG_ANS': 'reg_ans', 
+        'Trimestre': 'trimestre', 
+        'Ano': 'ano', 
+        'Valor Despesas': 'valor_despesa'
+    }
+    
+    cols_existentes_desp = [c for c in colunas_desp.keys() if c in df_geral.columns]
+    df_desp = df_geral[cols_existentes_desp].copy()
+    df_desp = df_desp.rename(columns=colunas_desp)
+
+    print(f" Salvando {len(df_desp)} despesas no MySQL...")
+    df_desp.to_sql('despesas', con=engine, if_exists='replace', index=False)
+    
+    print("\n SUCESSO ABSOLUTO! O Banco está 100% carregado.")
 
 if __name__ == "__main__":
     importar_dados()

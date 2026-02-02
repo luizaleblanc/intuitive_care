@@ -2,9 +2,9 @@ import pandas as pd
 
 class DataEnricher:
     def __init__(self):
-        self.path_despesas = "data/consolidado_despesas.csv"
-        self.path_cadop = "data/raw/Relatorio_cadop.csv"
-        self.output_path = "data/despesas_enriquecidas.csv"
+        self.path_despesas = "../data/consolidado_despesas.csv"
+        self.path_cadop = "../data/raw/Relatorio_cadop.csv"
+        self.output_path = "../data/despesas_enriquecidas.csv"
 
     def enriquecer(self):
         print("Iniciando processamento...")

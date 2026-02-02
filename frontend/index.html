@@ -1,125 +1,323 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-br">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard Sênior - Intuitive Care</title>
+    <title>Intuitive Care - Dashboard</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+      :root {
+        --primary: #007bff;
+        --secondary: #6c757d;
+        --bg: #f8f9fa;
+        --card-bg: #ffffff;
+      }
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        background-color: #f0f2f5;
-        color: #333;
+        background-color: var(--bg);
+        margin: 0;
+        padding: 20px;
       }
       .container {
-        width: 90%;
-        max-width: 900px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+      }
+      .card {
+        background: var(--card-bg);
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      input {
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 300px;
+      }
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        background-color: var(--primary);
+        color: white;
+      }
+      button:disabled {
+        background-color: var(--secondary);
+        cursor: not-allowed;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background-color: #f1f1f1;
+      }
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
         background: white;
         padding: 30px;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        margin-top: 30px;
+        border-radius: 8px;
+        width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
       }
-      h1 {
-        text-align: center;
-        margin-bottom: 20px;
-        color: #2c3e50;
+      .close-btn {
+        background: red;
+        float: right;
       }
-
-      .controls {
-        text-align: center;
+      .tabs {
         margin-bottom: 20px;
       }
-      select {
-        padding: 10px 20px;
-        font-size: 16px;
-        border-radius: 6px;
-        border: 1px solid #ccc;
-        cursor: pointer;
+      .tab-btn {
+        background: transparent;
+        color: #333;
+        border: 1px solid #ddd;
+        margin-right: 5px;
+      }
+      .tab-btn.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <h1>Monitoramento de Despesas ANS</h1>
-
-      <div class="controls">
-        <label for="anoSelect">Filtrar por Ano: </label>
-        <select id="anoSelect">
-          <option value="">Todos os Anos (Acumulado)</option>
-          <option value="2023">2023</option>
-          <option value="2022">2022</option>
-          <option value="2021">2021</option>
-        </select>
+    <div id="app" class="container">
+      <div class="header">
+        <h1>Dashboard Operadoras</h1>
       </div>
 
-      <canvas id="meuGrafico"></canvas>
+      <div class="tabs">
+        <button
+          :class="['tab-btn', { active: currentView === 'list' }]"
+          @click="currentView = 'list'"
+        >
+          Lista de Operadoras
+        </button>
+        <button :class="['tab-btn', { active: currentView === 'stats' }]" @click="loadStats">
+          Estatísticas e Gráficos
+        </button>
+      </div>
+
+      <div v-if="currentView === 'list'">
+        <div class="card">
+          <div class="controls">
+            <input
+              v-model="search"
+              @keyup.enter="fetchOperadoras(1)"
+              placeholder="Buscar por Razão Social ou Registro ANS..."
+            />
+            <button @click="fetchOperadoras(1)">Buscar</button>
+          </div>
+
+          <div v-if="loading">Carregando dados...</div>
+
+          <table v-else>
+            <thead>
+              <tr>
+                <th>Registro ANS</th>
+                <th>CNPJ</th>
+                <th>Razão Social</th>
+                <th>UF</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="op in operadoras" :key="op.cnpj">
+                <td>{{ op.reg_ans }}</td>
+                <td>{{ op.cnpj }}</td>
+                <td>{{ op.razao_social }}</td>
+                <td>{{ op.uf }}</td>
+                <td>
+                  <button @click="openDetails(op)">Ver Detalhes</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="controls" style="margin-top: 20px; justify-content: center">
+            <button :disabled="page === 1" @click="changePage(-1)">Anterior</button>
+            <span style="align-self: center">Página {{ page }} de {{ totalPages }}</span>
+            <button :disabled="page === totalPages" @click="changePage(1)">Próxima</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-show="currentView === 'stats'">
+        <div class="card">
+          <h2>Distribuição de Despesas por Estado (Top 5)</h2>
+          <canvas id="chartCanvas"></canvas>
+          <div style="margin-top: 20px">
+            <h3>Total Geral de Despesas: {{ formatCurrency(totalGeral) }}</h3>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="selectedOp" class="modal">
+        <div class="modal-content">
+          <button class="close-btn" @click="selectedOp = null">X</button>
+          <h2>{{ selectedOp.razao_social }}</h2>
+          <p><strong>CNPJ:</strong> {{ selectedOp.cnpj }}</p>
+          <p><strong>Modalidade:</strong> {{ selectedOp.modalidade }}</p>
+
+          <h3>Histórico de Despesas</h3>
+          <ul v-if="history.length">
+            <li v-for="(item, index) in history" :key="index">
+              {{ item.ano }}/{{ item.trimestre }} - {{ formatCurrency(item.valor_despesa) }}
+            </li>
+          </ul>
+          <p v-else>Nenhuma despesa registrada.</p>
+        </div>
+      </div>
     </div>
 
     <script>
-      let meuChart = null;
+      const { createApp, ref, onMounted, nextTick } = Vue;
 
-      async function carregarDados(ano = "") {
-        try {
-          let url = "http://127.0.0.1:5000/top10";
-          if (ano) {
-            url += `?ano=${ano}`;
-          }
+      createApp({
+        setup() {
+          const currentView = ref("list");
+          const operadoras = ref([]);
+          const search = ref("");
+          const page = ref(1);
+          const totalPages = ref(1);
+          const loading = ref(false);
+          const selectedOp = ref(null);
+          const history = ref([]);
+          const totalGeral = ref(0);
+          let chartInstance = null;
 
-          const response = await fetch(url);
-          const dados = await response.json();
+          const API_URL = "http://127.0.0.1:5000/api";
 
-          const nomes = dados.map((item) => item.razao_social || `Reg. ${item.reg_ans}`);
-          const valores = dados.map((item) => parseFloat(item.total_despesas));
+          const fetchOperadoras = async (p = 1) => {
+            loading.value = true;
+            try {
+              const res = await fetch(
+                `${API_URL}/operadoras?page=${p}&limit=10&search=${search.value}`,
+              );
+              const json = await res.json();
+              operadoras.value = json.data;
+              page.value = json.meta.page;
+              totalPages.value = json.meta.pages;
+            } catch (e) {
+              alert("Erro ao buscar dados");
+            } finally {
+              loading.value = false;
+            }
+          };
 
-          if (meuChart) {
-            meuChart.destroy();
-          }
+          const changePage = (delta) => {
+            const newPage = page.value + delta;
+            if (newPage > 0 && newPage <= totalPages.value) {
+              fetchOperadoras(newPage);
+            }
+          };
 
-          const ctx = document.getElementById("meuGrafico").getContext("2d");
-          meuChart = new Chart(ctx, {
-            type: "bar",
-            data: {
-              labels: nomes,
-              datasets: [
-                {
-                  label: "Total de Despesas (R$)",
-                  data: valores,
-                  backgroundColor: "#3498db",
-                  borderRadius: 4,
-                },
-              ],
-            },
-            options: {
-              responsive: true,
-              plugins: {
-                legend: { position: "bottom" },
-                tooltip: {
-                  callbacks: {
-                    label: function (context) {
-                      return new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }).format(context.raw);
+          const openDetails = async (op) => {
+            selectedOp.value = op;
+            history.value = [];
+            try {
+              const res = await fetch(`${API_URL}/operadoras/${op.cnpj}/despesas`);
+              history.value = await res.json();
+            } catch (e) {
+              console.error(e);
+            }
+          };
+
+          const loadStats = async () => {
+            currentView.value = "stats";
+            try {
+              const res = await fetch(`${API_URL}/estatisticas`);
+              const data = await res.json();
+
+              totalGeral.value = data.geral.total_geral;
+              renderChart(data.top_estados);
+            } catch (e) {
+              console.error(e);
+            }
+          };
+
+          const renderChart = (data) => {
+            if (chartInstance) chartInstance.destroy();
+
+            nextTick(() => {
+              const ctx = document.getElementById("chartCanvas");
+              if (!ctx) return;
+
+              chartInstance = new Chart(ctx, {
+                type: "bar",
+                data: {
+                  labels: data.map((d) => d.uf),
+                  datasets: [
+                    {
+                      label: "Despesas por Estado (R$)",
+                      data: data.map((d) => d.total),
+                      backgroundColor: "#007bff",
                     },
-                  },
+                  ],
                 },
-              },
-            },
-          });
-        } catch (erro) {
-          console.error("Erro:", erro);
-          alert("Erro ao conectar na API.");
-        }
-      }
-      carregarDados();
+              });
+            });
+          };
 
-      document.getElementById("anoSelect").addEventListener("change", (event) => {
-        carregarDados(event.target.value);
-      });
+          const formatCurrency = (val) => {
+            return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+              val,
+            );
+          };
+
+          onMounted(() => {
+            fetchOperadoras();
+          });
+
+          return {
+            currentView,
+            operadoras,
+            search,
+            page,
+            totalPages,
+            loading,
+            selectedOp,
+            history,
+            totalGeral,
+            fetchOperadoras,
+            changePage,
+            openDetails,
+            loadStats,
+            formatCurrency,
+          };
+        },
+      }).mount("#app");
     </script>
   </body>
 </html>

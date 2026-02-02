@@ -1,0 +1,72 @@
+{
+  "info": {
+    "_postman_id": "intuitive-care-challenge",
+    "name": "Intuitive Care - Health Analytics API",
+    "description": "Coleção de rotas para a API de análise de operadoras da ANS.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Listar Operadoras (Paginado)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/api/operadoras?page=1&limit=10&search=",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "operadoras"],
+          "query": [
+            { "key": "page", "value": "1", "description": "Número da página" },
+            { "key": "limit", "value": "10", "description": "Itens por página" },
+            { "key": "search", "value": "", "description": "Termo de busca (Opcional)" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Detalhes da Operadora",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/api/operadoras/41511429000120",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "operadoras", "41511429000120"],
+          "description": "Busca detalhes de uma operadora pelo CNPJ."
+        }
+      }
+    },
+    {
+      "name": "Histórico de Despesas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/api/operadoras/41511429000120/despesas",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "operadoras", "41511429000120", "despesas"]
+        }
+      }
+    },
+    {
+      "name": "Estatísticas Gerais (Dashboard)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/api/estatisticas",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "estatisticas"]
+        }
+      }
+    }
+  ]
+}
