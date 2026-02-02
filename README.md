@@ -55,13 +55,3 @@ Conforme solicitado no desafio, abaixo estão detalhadas as decisões arquitetur
 ## Estrutura do Projeto (Clean Architecture)
 
 O código foi refatorado para evitar acoplamento, separando claramente as camadas de responsabilidade:
-
-```text
-/
-├── api/                # Lógica da API e rotas (Flask)
-├── etl/                # Scripts de Extração e Transformação (Python)
-├── frontend/           # Interface do Usuário (Vue.js)
-├── infra/              # Configurações de infraestrutura
-├── docker-compose.yml  # Orquestração dos serviços
-└── intuitive_care_collection.json # Coleção Postman para testes
-```
