@@ -1,62 +1,72 @@
-import pandas as pd
-from sqlalchemy import create_engine, text
 import os
-
-DB_USER = 'root'
-DB_PASS = 'root'
-DB_HOST = 'localhost'
-DB_PORT = '3307'
-DB_NAME = 'intuitive_care'
+import pandas as pd
+from sqlalchemy import create_engine
 
 def importar_dados():
-    print("Iniciando importação COMPLETA (Operadoras + Despesas)...")
+    db_host = os.getenv('DB_HOST', 'localhost')
+    db_user = os.getenv('DB_USER', 'root')
+    db_pass = os.getenv('DB_PASSWORD', 'root')
+    db_name = os.getenv('DB_NAME', 'intuitive_care')
+
+    conn_string = f"mysql+pymysql://{db_user}:{db_pass}@{db_host}/{db_name}"
     
-    conn_string = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     engine = create_engine(conn_string)
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    arq_csv = os.path.join(base_dir, 'data', 'despesas_enriquecidas.csv')
-    
-    if not os.path.exists(arq_csv):
-        print(f"ERRO: Arquivo não encontrado: {arq_csv}")
-        return
+    try:
+        arquivo_operadoras = 'data/raw/Relatorio_cadop.csv'
+        
+        if os.path.exists(arquivo_operadoras):
+            df_ops = pd.read_csv(arquivo_operadoras, sep=';', encoding='latin1')
+            
+            df_ops.columns = df_ops.columns.str.strip()
+            
+            df_ops.rename(columns={
+                'Razão Social': 'razao_social', 
+                'CNPJ': 'cnpj', 
+                'Registro ANS': 'registro_ans',
+                'Logradouro': 'logradouro',
+                'Numero': 'numero',
+                'Complemento': 'complemento',
+                'Bairro': 'bairro',
+                'Cidade': 'cidade',
+                'UF': 'uf',
+                'CEP': 'cep',
+                'DDD': 'ddd',
+                'Telefone': 'telefone',
+                'Fax': 'fax',
+                'Endereço eletrônico': 'email',
+                'Representante': 'representante',
+                'Cargo Representante': 'cargo_representante',
+                'Data Registro ANS': 'data_registro_ans'
+            }, inplace=True)
+            
+            df_ops.to_sql('operadoras', con=engine, if_exists='replace', index=False)
+            print("Tabela 'operadoras' importada com sucesso.")
+        else:
+            print(f"Arquivo {arquivo_operadoras} não encontrado.")
 
-    print(f"Lendo arquivo: {arq_csv}...")
-    df_geral = pd.read_csv(arq_csv)
+        arquivo_despesas = 'data/despesas_enriquecidas.csv'
+        if os.path.exists(arquivo_despesas):
+            df_despesas = pd.read_csv(arquivo_despesas)
+            
+            df_despesas.rename(columns={
+                'Valor Despesas': 'valor_despesa',
+                'REG_ANS': 'reg_ans',
+                'Ano': 'ano',
+                'Trimestre': 'trimestre',
+                'RazaoSocial': 'razao_social',
+                'Modalidade': 'modalidade',
+                'CNPJ': 'cnpj',
+                'UF': 'uf'
+            }, inplace=True)
 
-    print("Tratando dados de OPERADORAS...")
-    colunas_ops = {
-        'REG_ANS': 'reg_ans',
-        'CNPJ': 'cnpj', 
-        'RazaoSocial': 'razao_social',
-        'Modalidade': 'modalidade',
-        'UF': 'uf'
-    }
-    
-    cols_existentes_ops = [c for c in colunas_ops.keys() if c in df_geral.columns]
-    df_ops = df_geral[cols_existentes_ops].copy()
-    df_ops = df_ops.rename(columns=colunas_ops)
-    df_ops = df_ops.drop_duplicates(subset=['reg_ans']) 
+            df_despesas.to_sql('despesas', con=engine, if_exists='replace', index=False)
+            print("Tabela 'despesas' importada com sucesso.")
+        else:
+            print(f"Arquivo {arquivo_despesas} não encontrado.")
 
-    print(f"Salvando {len(df_ops)} operadoras no MySQL...")
-    df_ops.to_sql('operadoras', con=engine, if_exists='replace', index=False)
-
-    print("Tratando dados de DESPESAS...")
-    colunas_desp = {
-        'REG_ANS': 'reg_ans', 
-        'Trimestre': 'trimestre', 
-        'Ano': 'ano', 
-        'Valor Despesas': 'valor_despesa'
-    }
-    
-    cols_existentes_desp = [c for c in colunas_desp.keys() if c in df_geral.columns]
-    df_desp = df_geral[cols_existentes_desp].copy()
-    df_desp = df_desp.rename(columns=colunas_desp)
-
-    print(f" Salvando {len(df_desp)} despesas no MySQL...")
-    df_desp.to_sql('despesas', con=engine, if_exists='replace', index=False)
-    
-    print("\n SUCESSO ABSOLUTO! O Banco está 100% carregado.")
+    except Exception as e:
+        print(f"Erro: {e}")
 
 if __name__ == "__main__":
     importar_dados()
