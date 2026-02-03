@@ -17,6 +17,48 @@ db_config = {
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
+def adaptar_para_frontend(dados):
+    if not dados:
+        return dados
+    
+    mapeamento = {
+        'registro_ans': ['Registro ANS', 'Registro_ANS', 'REGISTRO_ANS'],
+        'razao_social': ['Razão Social', 'Razao Social', 'Razao_Social'],
+        'cnpj': ['CNPJ'],
+        'uf': ['UF'],
+        'nome_fantasia': ['Nome Fantasia', 'Nome_Fantasia'],
+        'modalidade': ['Modalidade'],
+        'logradouro': ['Logradouro'],
+        'numero': ['Numero'],
+        'complemento': ['Complemento'],
+        'bairro': ['Bairro'],
+        'cidade': ['Cidade'],
+        'cep': ['CEP'],
+        'telefone': ['Telefone'],
+        'email': ['Endereco_eletronico', 'Email'],
+        'representante': ['Representante'],
+        'cargo_representante': ['Cargo Representante']
+    }
+
+    if isinstance(dados, list):
+        lista_adaptada = []
+        for item in dados:
+            novo_item = item.copy()
+            for chave_banco, chaves_frontend in mapeamento.items():
+                if chave_banco in item:
+                    for chave_front in chaves_frontend:
+                        novo_item[chave_front] = item[chave_banco]
+            lista_adaptada.append(novo_item)
+        return lista_adaptada
+
+    else:
+        novo_item = dados.copy()
+        for chave_banco, chaves_frontend in mapeamento.items():
+            if chave_banco in dados:
+                for chave_front in chaves_frontend:
+                    novo_item[chave_front] = dados[chave_banco]
+        return novo_item
+
 @app.route('/api/operadoras', methods=['GET'])
 def get_operadoras():
     try:
@@ -30,19 +72,19 @@ def get_operadoras():
 
         query_base = "FROM operadoras WHERE razao_social LIKE %s OR cnpj LIKE %s"
         search_param = f"%{search}%"
-        
+
         cursor.execute(f"SELECT COUNT(*) as total {query_base}", (search_param, search_param))
         total_records = cursor.fetchone()['total']
 
         sql = f"SELECT * {query_base} LIMIT %s OFFSET %s"
-        cursor.execute(sql, (search_param, search_param, limit, offset))
+        cursor.execute(sql, (search_param, search_param, limit, offset))  
         results = cursor.fetchall()
 
         cursor.close()
         conn.close()
 
         return jsonify({
-            'data': results,
+            'data': adaptar_para_frontend(results),
             'total': total_records,
             'page': page,
             'limit': limit,
@@ -61,12 +103,13 @@ def get_operadora_details(cnpj):
         cursor.execute("SELECT * FROM operadoras WHERE cnpj = %s", (cnpj,))
         operadora = cursor.fetchone()
 
-        if not operadora:
-            return jsonify({"erro": "Operadora não encontrada"}), 404
-
         cursor.close()
         conn.close()
-        return jsonify(operadora)
+
+        if not operadora:
+            return jsonify({"erro": "Operadora não encontrada"}), 404      
+
+        return jsonify(adaptar_para_frontend(operadora))
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
@@ -77,19 +120,19 @@ def get_operadora_despesas(cnpj):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT reg_ans FROM operadoras WHERE cnpj = %s", (cnpj,))
+        cursor.execute("SELECT registro_ans FROM operadoras WHERE cnpj = %s", (cnpj,))
         op = cursor.fetchone()
-        
+
         if not op:
              return jsonify([]), 404
 
         sql = """
-            SELECT ano, trimestre, valor_despesa 
-            FROM despesas 
-            WHERE reg_ans = %s 
+            SELECT ano, trimestre, valor_despesa
+            FROM despesas
+            WHERE reg_ans = %s
             ORDER BY ano DESC, trimestre DESC
         """
-        cursor.execute(sql, (op['reg_ans'],))
+        cursor.execute(sql, (op['registro_ans'],))
         results = cursor.fetchall()
 
         cursor.close()
@@ -108,7 +151,7 @@ def get_estatisticas():
         cursor.execute("""
             SELECT o.uf, SUM(d.valor_despesa) as total
             FROM operadoras o
-            JOIN despesas d ON o.reg_ans = d.reg_ans
+            JOIN despesas d ON o.registro_ans = d.reg_ans
             GROUP BY o.uf
             ORDER BY total DESC
             LIMIT 5
