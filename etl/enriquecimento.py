@@ -1,56 +1,95 @@
 import pandas as pd
+import os
 
-class DataEnricher:
-    def __init__(self):
-        self.path_despesas = "../data/consolidado_despesas.csv"
-        self.path_cadop = "../data/raw/Relatorio_cadop.csv"
-        self.output_path = "../data/despesas_enriquecidas.csv"
+def enriquecer_dados():
+    arquivo_despesas = os.path.join('data', 'consolidado_despesas.csv')
+    arquivo_operadoras = os.path.join('data', 'raw', 'Relatorio_cadop.csv')
+    saida_enriquecida = os.path.join('data', 'despesas_enriquecidas.csv')
+    saida_agregada = os.path.join('data', 'despesas_agregadas.csv')
 
-    def enriquecer(self):
-        print("Iniciando processamento...")
+    if not os.path.exists(arquivo_despesas):
+        print(f"ERRO: Arquivo não encontrado: {arquivo_despesas}")
+        return
+    
+    if not os.path.exists(arquivo_operadoras):
+        print(f"ERRO: Arquivo não encontrado: {arquivo_operadoras}")
+        return
+
+    print("Carregando arquivos...")
+    
+    try:
+        df_despesas = pd.read_csv(arquivo_despesas)
+        print(f"Colunas originais em Despesas: {list(df_despesas.columns)}")
+        
+        mapa_despesas = {
+            'REG_ANS': 'reg_ans',
+            'RegistroANS': 'reg_ans',
+            'Valor Despesas': 'valor_despesa',  
+            'Valor_Despesas': 'valor_despesa',
+            'Trimestre': 'trimestre',
+            'Ano': 'ano'
+        }
+        df_despesas.rename(columns=mapa_despesas, inplace=True)
+        
         try:
-            df_despesas = pd.read_csv(self.path_despesas)
+            df_ops = pd.read_csv(arquivo_operadoras, sep=';', encoding='utf-8')
+        except UnicodeDecodeError:
+            df_ops = pd.read_csv(arquivo_operadoras, sep=';', encoding='latin1')
             
-            try:
-                df_cadop = pd.read_csv(self.path_cadop, sep=';', encoding='utf-8', dtype=str)
-            except UnicodeDecodeError:
-                df_cadop = pd.read_csv(self.path_cadop, sep=';', encoding='latin1', dtype=str)
+        print(f"Colunas originais em Operadoras: {list(df_ops.columns)}")
 
-            df_cadop.columns = df_cadop.columns.str.strip().str.upper()
+        df_ops.columns = df_ops.columns.str.strip()
+        
+        mapa_colunas_ops = {
+            'Registro ANS': 'reg_ans',
+            'REGISTRO_OPERADORA': 'reg_ans',
+            'CD_OPERADORA': 'reg_ans',
+            'Razão Social': 'RazaoSocial',
+            'Razao_Social': 'RazaoSocial',
+            'CNPJ': 'CNPJ',
+            'UF': 'UF',
+            'Modalidade': 'Modalidade'
+        }
+        df_ops.rename(columns=mapa_colunas_ops, inplace=True)
+        
+        if 'reg_ans' not in df_despesas.columns:
+            raise ValueError(f"Coluna 'reg_ans' sumiu das Despesas. Atuais: {df_despesas.columns}")
+        if 'valor_despesa' not in df_despesas.columns:
+            raise ValueError(f"Coluna 'valor_despesa' sumiu das Despesas. Atuais: {df_despesas.columns}")
 
-            mapeamento = {
-                'REGISTRO_OPERADORA': 'REG_ANS',
-                'REGISTRO_ANS': 'REG_ANS',
-                'CD_OPERADORA': 'REG_ANS',
-                'CNPJ': 'CNPJ',
-                'RAZAO_SOCIAL': 'RazaoSocial',
-                'MODALIDADE': 'Modalidade',
-                'UF': 'UF'
-            }
-            df_cadop = df_cadop.rename(columns=mapeamento)
+        df_despesas['reg_ans'] = pd.to_numeric(df_despesas['reg_ans'], errors='coerce')
+        df_ops['reg_ans'] = pd.to_numeric(df_ops['reg_ans'], errors='coerce')
 
-            colunas_alvo = ['REG_ANS', 'CNPJ', 'RazaoSocial', 'Modalidade', 'UF']
-            
-            colunas_existentes = [c for c in colunas_alvo if c in df_cadop.columns]
-            df_cadop = df_cadop[colunas_existentes]
+        print("Cruzando dados...")
+        df_final = pd.merge(df_despesas, df_ops, on='reg_ans', how='left')
+        
+        df_final['RazaoSocial'] = df_final['RazaoSocial'].fillna('Não Identificado')
+        df_final['UF'] = df_final['UF'].fillna('N/A')
+        
+        df_final.to_csv(saida_enriquecida, index=False)
+        print(f"Arquivo enriquecido salvo: {saida_enriquecida}")
 
-            df_despesas['REG_ANS'] = df_despesas['REG_ANS'].astype(str)
-            df_cadop['REG_ANS'] = df_cadop['REG_ANS'].astype(str)
+        print("Calculando estatísticas...")
+        
+        if df_final['valor_despesa'].dtype == 'object':
+             df_final['valor_despesa'] = df_final['valor_despesa'].astype(str).str.replace(',', '.').astype(float)
+        
+        df_final['valor_despesa'] = pd.to_numeric(df_final['valor_despesa'], errors='coerce').fillna(0)
 
-            print("Cruzando tabelas...")
-            df_final = pd.merge(df_despesas, df_cadop, on='REG_ANS', how='left')
+        df_agregado = df_final.groupby('reg_ans')['valor_despesa'].agg(
+            media_despesa='mean',
+            desvio_padrao_despesa='std',
+            total_despesa='sum',
+            contagem='count'
+        ).reset_index()
 
-            if 'CNPJ' in df_final.columns:
-                df_final['CNPJ'] = df_final['CNPJ'].fillna("00000000000000")
-            if 'UF' in df_final.columns:
-                df_final['UF'] = df_final['UF'].fillna("NI")  
+        df_agregado['desvio_padrao_despesa'] = df_agregado['desvio_padrao_despesa'].fillna(0)
 
-            df_final.to_csv(self.output_path, index=False, encoding='utf-8')
-            print(f"Sucesso absoluto! Arquivo corrigido gerado em: {self.output_path}")
+        df_agregado.to_csv(saida_agregada, index=False)
+        print(f"SUCESSO: Arquivo de estatísticas gerado em {saida_agregada}")
 
-        except Exception as e:
-            print(f"ERRO: {e}")
+    except Exception as e:
+        print(f"ERRO CRÍTICO: {e}")
 
 if __name__ == "__main__":
-    enricher = DataEnricher()
-    enricher.enriquecer()
+    enriquecer_dados()
