@@ -1,10 +1,6 @@
-Aqui está uma versão reescrita e bem estruturada, utilizando marcadores, blocos de código e negrito para deixar a leitura mais clara, dividida e profissional:
-
----
-
 # Intuitive Care
 
-Esta é a solução desenvolvida para o desafio técnico de Engenharia de Dados e Full Stack. O projeto engloba uma pipeline ETL automatizada para extração de dados da ANS (Agência Nacional de Saúde Suplementar) e um dashboard interativo focado na análise de despesas das operadoras de saúde.
+Esse projeto engloba uma pipeline ETL automatizada para extração de dados da ANS (Agência Nacional de Saúde Suplementar) e um dashboard interativo focado na análise de despesas das operadoras de saúde.
 
 ## Resumo das Decisões Técnicas
 
