@@ -1,71 +1,184 @@
 {
   "info": {
-    "_postman_id": "intuitive-care-challenge",
-    "name": "Intuitive Care - Health Analytics API",
-    "description": "Coleção de rotas para a API de análise de operadoras da ANS.",
+    "_postman_id": "intuitive-care-rest-v2",
+    "name": "Intuitive Care - REST API (Flask + MySQL)",
+    "description": "Coleção completa com autenticação JWT, recuperação de senha, CRUD de Operadoras, CRUD de Despesas e Estatísticas.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api" },
+    { "key": "token", "value": "" }
+  ],
   "item": [
     {
-      "name": "Listar Operadoras (Paginado)",
+      "name": "01. Saúde da API",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "http://localhost:5000/api/operadoras?page=1&limit=10&search=",
-          "protocol": "http",
-          "host": ["localhost"],
-          "port": "5000",
-          "path": ["api", "operadoras"],
-          "query": [
-            { "key": "page", "value": "1", "description": "Número da página" },
-            { "key": "limit", "value": "10", "description": "Itens por página" },
-            { "key": "search", "value": "", "description": "Termo de busca (Opcional)" }
-          ]
-        }
+        "url": "{{baseUrl}}/health"
       }
     },
     {
-      "name": "Detalhes da Operadora",
+      "name": "02. Auth - Cadastrar Usuário",
       "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "http://localhost:5000/api/operadoras/41511429000120",
-          "protocol": "http",
-          "host": ["localhost"],
-          "port": "5000",
-          "path": ["api", "operadoras", "41511429000120"],
-          "description": "Busca detalhes de uma operadora pelo CNPJ."
-        }
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Novo Analista\",\n  \"email\": \"analista@uninassau.edu.br\",\n  \"senha\": \"Senha123\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/register"
       }
     },
     {
-      "name": "Histórico de Despesas",
+      "name": "03. Auth - Login",
       "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "http://localhost:5000/api/operadoras/41511429000120/despesas",
-          "protocol": "http",
-          "host": ["localhost"],
-          "port": "5000",
-          "path": ["api", "operadoras", "41511429000120", "despesas"]
-        }
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@intuitivecare.com.br\",\n  \"senha\": \"Senha@123\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
       }
     },
     {
-      "name": "Estatísticas Gerais (Dashboard)",
+      "name": "04. Auth - Usuário Autenticado (Me)",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "http://localhost:5000/api/estatisticas",
-          "protocol": "http",
-          "host": ["localhost"],
-          "port": "5000",
-          "path": ["api", "estatisticas"]
-        }
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "05. Auth - Recuperar Senha (Enviar Código)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@intuitivecare.com.br\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/forgot-password"
+      }
+    },
+    {
+      "name": "06. Auth - Redefinir Senha",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@intuitivecare.com.br\",\n  \"codigo\": \"123456\",\n  \"nova_senha\": \"NovaSenha123\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/reset-password"
+      }
+    },
+    {
+      "name": "07. Auth - Logout",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/auth/logout"
+      }
+    },
+    {
+      "name": "08. Operadoras - Listar (GET)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/operadoras?page=1&limit=10&search="
+      }
+    },
+    {
+      "name": "09. Operadoras - Criar (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registro_ans\": \"999111\",\n  \"cnpj\": \"11444777000161\",\n  \"razao_social\": \"OPERADORA EXEMPLO SAUDE LTDA\",\n  \"nome_fantasia\": \"EXEMPLO SAUDE\",\n  \"modalidade\": \"Medicina de Grupo\",\n  \"cidade\": \"João Pessoa\",\n  \"uf\": \"PB\"\n}"
+        },
+        "url": "{{baseUrl}}/operadoras"
+      }
+    },
+    {
+      "name": "10. Operadoras - Atualizar (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome_fantasia\": \"EXEMPLO SAUDE PLUS\",\n  \"uf\": \"PE\"\n}"
+        },
+        "url": "{{baseUrl}}/operadoras/999111"
+      }
+    },
+    {
+      "name": "11. Operadoras - Excluir (DELETE)",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/operadoras/999111"
+      }
+    },
+    {
+      "name": "12. Despesas - Listar (GET)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/despesas?page=1&limit=20"
+      }
+    },
+    {
+      "name": "13. Despesas - Criar (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reg_ans\": \"359017\",\n  \"ano\": 2025,\n  \"trimestre\": 2,\n  \"valor_despesa\": 42500000.00,\n  \"categoria\": \"Despesa Assistencial\",\n  \"descricao\": \"Apuração 2T2025\"\n}"
+        },
+        "url": "{{baseUrl}}/despesas"
+      }
+    },
+    {
+      "name": "14. Despesas - Atualizar (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"valor_despesa\": 45000000.00\n}"
+        },
+        "url": "{{baseUrl}}/despesas/1"
+      }
+    },
+    {
+      "name": "15. Despesas - Excluir (DELETE)",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/despesas/1"
+      }
+    },
+    {
+      "name": "16. Estatísticas Gerais (GET)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/estatisticas"
       }
     }
   ]

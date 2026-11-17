@@ -11,3 +11,5 @@ data/raw/*.pdf
 data/*.csv
 *.log
 .vscode/
+dist/
+backend/database/*.db
