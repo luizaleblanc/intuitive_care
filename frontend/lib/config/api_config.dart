@@ -15,6 +15,14 @@ class ApiConfig {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:5000/api';
     }
+    if (kIsWeb) {
+      // Em desenvolvimento (flutter run -d chrome) o app roda em outra porta: usa a API Flask local.
+      final host = Uri.base.host;
+      if ((host == 'localhost' || host == '127.0.0.1') && Uri.base.port != 5000) {
+        return 'http://localhost:5000/api';
+      }
+      return '${Uri.base.origin}/api';
+    }
     return 'http://localhost:5000/api';
   }
 }

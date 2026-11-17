@@ -114,15 +114,16 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateProfile({required String nome}) async {
+  /// Atualiza dados pessoais, foto e preferências do próprio usuário.
+  Future<bool> updateProfile(Map<String, dynamic> campos) async {
     _isLoading = true;
     _errorMessage = null;
     _successMessage = null;
     notifyListeners();
 
     try {
-      _currentUser = await _repository.updateProfile(nome: nome.trim());
-      _successMessage = 'Perfil atualizado com sucesso.';
+      _currentUser = await _repository.updateProfile(campos);
+      _successMessage = 'Perfil atualizado';
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;

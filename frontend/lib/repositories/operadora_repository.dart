@@ -1,9 +1,8 @@
-import '../models/despesa_model.dart';
 import '../models/operadora_model.dart';
 import '../models/paginated_response.dart';
 import '../services/operadora_service.dart';
 
-/// Repositório intermediário para operações CRUD de operadoras.
+/// Intermedia ViewModels e o serviço HTTP de operadoras.
 class OperadoraRepository {
   final OperadoraService _service;
 
@@ -11,20 +10,14 @@ class OperadoraRepository {
 
   Future<PaginatedResponse<OperadoraModel>> listOperadoras({
     int page = 1,
-    int limit = 10,
+    int limit = 15,
     String search = '',
-    String uf = '',
+    String modalidade = '',
   }) async {
-    final json = await _service.fetchOperadoras(
-      page: page,
-      limit: limit,
-      search: search,
-      uf: uf,
-    );
+    final json = await _service.fetchOperadoras(page: page, limit: limit, search: search, modalidade: modalidade);
     final items = (json['data'] as List<dynamic>? ?? [])
         .map((item) => OperadoraModel.fromJson(Map<String, dynamic>.from(item as Map)))
         .toList();
-
     return PaginatedResponse<OperadoraModel>(
       data: items,
       total: (json['total'] as num?)?.toInt() ?? items.length,
@@ -34,15 +27,15 @@ class OperadoraRepository {
     );
   }
 
-  Future<OperadoraModel> getOperadora(String identifier) async {
-    final json = await _service.fetchOperadoraByIdentifier(identifier);
-    return OperadoraModel.fromJson(json);
-  }
+  Future<OperadorasResumo> resumo() async => OperadorasResumo.fromJson(await _service.fetchResumo());
 
-  Future<List<DespesaModel>> getDespesasOperadora(String identifier) async {
-    final list = await _service.fetchDespesasByOperadora(identifier);
-    return list
-        .map((item) => DespesaModel.fromJson(Map<String, dynamic>.from(item as Map)))
+  /// Linhas do CSV gerado pela API (cabeçalho na primeira linha).
+  Future<List<List<String>>> exportar({String search = '', String modalidade = ''}) async {
+    final texto = (await _service.exportarCsv(search: search, modalidade: modalidade)).replaceFirst('﻿', '');
+    return texto
+        .split(RegExp(r'\r?\n'))
+        .where((l) => l.trim().isNotEmpty)
+        .map((l) => l.split(';'))
         .toList();
   }
 
@@ -51,12 +44,13 @@ class OperadoraRepository {
     return OperadoraModel.fromJson(Map<String, dynamic>.from(json['data'] as Map));
   }
 
-  Future<OperadoraModel> updateOperadora(String registroAns, OperadoraModel operadora) async {
-    final json = await _service.updateOperadora(registroAns, operadora);
+  Future<OperadoraModel> updateOperadora(String registroAns, Map<String, dynamic> campos) async {
+    final json = await _service.updateOperadora(registroAns, campos);
     return OperadoraModel.fromJson(Map<String, dynamic>.from(json['data'] as Map));
   }
 
-  Future<void> deleteOperadora(String registroAns, {bool force = false}) async {
-    await _service.deleteOperadora(registroAns, force: force);
+  Future<OperadoraModel> updateStatus(String registroAns, String status) async {
+    final json = await _service.updateStatus(registroAns, status);
+    return OperadoraModel.fromJson(Map<String, dynamic>.from(json['data'] as Map));
   }
 }

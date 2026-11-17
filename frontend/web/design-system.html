@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Intuitive Care — Controle e Tratamento de dados · Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'sans-serif'], display: ['"Plus Jakarta Sans"', 'sans-serif'] },
+      colors: {
+        forest: '#113E32', mint: '#4AD295', surface: '#F2F4F3', sage: '#DCE7E2',
+        ink: '#0F172A', muted: '#64748B', ok: '#22C55E', danger: '#EF4444', lime: '#C8F169'
+      },
+      boxShadow: { card: '0 1px 2px rgba(15,23,42,.04), 0 4px 16px rgba(15,23,42,.05)', lift: '0 10px 30px rgba(17,62,50,.18)' }
+    }
+  }
+};
+</script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js"></script>
+<style>
+  body { background:#F2F4F3; font-family: Inter, sans-serif; color:#0F172A; }
+  .scroll-thin::-webkit-scrollbar { width:6px; height:6px } .scroll-thin::-webkit-scrollbar-thumb { background:#cbd5d1; border-radius:9px }
+  @keyframes pulseDot { 0%,100%{opacity:1} 50%{opacity:.35} } .pulse-dot{animation:pulseDot 1.6s infinite}
+  @keyframes slideIn { from{transform:translateX(24px);opacity:0} to{transform:none;opacity:1} } .slide-in{animation:slideIn .25s ease-out}
+  @keyframes fadeUp { from{transform:translateY(8px);opacity:0} to{transform:none;opacity:1} } .fade-up{animation:fadeUp .3s ease-out}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef } = React;
+
+/* ============ Icon (lucide UMD -> React) ============ */
+const Icon = ({ name, size = 18, className = '', strokeWidth = 2 }) => {
+  const node = (window.lucide && window.lucide.icons && window.lucide.icons[name]) || null;
+  if (!node) return <span style={{ width: size, height: size, display: 'inline-block' }} />;
+  const children = Array.isArray(node[0]) ? node : (node[2] || []);
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {children.map(([tag, attrs], i) => React.createElement(tag, { key: i, ...attrs }))}
+    </svg>
+  );
+};
+
+/* ============ Tokens ============ */
+const COLORS = [
+  { name: 'Forest 900', token: 'brand_primary_dark', hex: '#113E32', use: 'Sidebar ativa, Hero KPI, CTAs primários', dark: true },
+  { name: 'Mint 400', token: 'brand_accent_mint', hex: '#4AD295', use: 'Gráficos, ícones, status ativo' },
+  { name: 'Lime Signal', token: 'accent_lime', hex: '#C8F169', use: 'Badge de variação sobre fundo escuro' },
+  { name: 'Surface', token: 'surface_bg', hex: '#F2F4F3', use: 'Fundo geral da aplicação' },
+  { name: 'Card', token: 'surface_card', hex: '#FFFFFF', use: 'Cards secundários, tabelas' },
+  { name: 'Sage', token: 'surface_sage_card', hex: '#DCE7E2', use: 'Cards analíticos laterais' },
+  { name: 'Success', token: 'semantic_success', hex: '#22C55E', use: 'Variação positiva, online' },
+  { name: 'Danger', token: 'semantic_danger', hex: '#EF4444', use: 'Falhas de lote, logout' },
+  { name: 'Ink', token: 'text_primary', hex: '#0F172A', use: 'Texto primário', dark: true },
+  { name: 'Slate', token: 'text_secondary', hex: '#64748B', use: 'Texto secundário', dark: true },
+];
+
+/* ============ Mock data (contexto ANS) ============ */
+const OPERADORAS = [
+  { reg: '326305', razao: 'Amil Assistência Médica Internacional S.A.', fantasia: 'Amil', cnpj: '29.309.127/0001-79', modalidade: 'Medicina de Grupo', uf: 'SP', benef: 3125480, despesa: 6.84, status: 'Ativa' },
+  { reg: '005711', razao: 'Bradesco Saúde S.A.', fantasia: 'Bradesco Saúde', cnpj: '92.693.118/0001-60', modalidade: 'Seguradora Especializada', uf: 'RJ', benef: 3698215, despesa: 9.12, status: 'Ativa' },
+  { reg: '368253', razao: 'Hapvida Assistência Médica S.A.', fantasia: 'Hapvida', cnpj: '63.554.067/0001-98', modalidade: 'Medicina de Grupo', uf: 'CE', benef: 4320110, despesa: 5.41, status: 'Ativa' },
+  { reg: '359017', razao: 'Notre Dame Intermédica Saúde S.A.', fantasia: 'NotreDame Intermédica', cnpj: '44.649.812/0001-38', modalidade: 'Medicina de Grupo', uf: 'SP', benef: 3874002, despesa: 5.97, status: 'Ativa' },
+  { reg: '343889', razao: 'Unimed Nacional — Cooperativa Central', fantasia: 'Unimed Nacional', cnpj: '02.812.468/0001-06', modalidade: 'Cooperativa Médica', uf: 'SP', benef: 1985330, despesa: 4.18, status: 'Ativa' },
+  { reg: '006246', razao: 'SulAmérica Companhia de Seguro Saúde', fantasia: 'SulAmérica Saúde', cnpj: '01.685.053/0001-56', modalidade: 'Seguradora Especializada', uf: 'RJ', benef: 2840770, despesa: 7.66, status: 'Ativa' },
+  { reg: '346659', razao: 'Caixa de Assistência dos Funcionários do Banco do Brasil', fantasia: 'Cassi', cnpj: '33.719.485/0001-27', modalidade: 'Autogestão', uf: 'DF', benef: 612480, despesa: 2.31, status: 'Ativa' },
+  { reg: '304701', razao: 'Unimed João Pessoa Cooperativa de Trabalho Médico', fantasia: 'Unimed JP', cnpj: '08.680.639/0001-77', modalidade: 'Cooperativa Médica', uf: 'PB', benef: 248910, despesa: 0.94, status: 'Ativa' },
+  { reg: '417173', razao: 'Odontoprev S.A.', fantasia: 'Odontoprev', cnpj: '58.119.199/0001-51', modalidade: 'Odontologia de Grupo', uf: 'SP', benef: 8410220, despesa: 0.61, status: 'Ativa' },
+  { reg: '412449', razao: 'Prevent Senior Private Operadora de Saúde Ltda.', fantasia: 'Prevent Senior', cnpj: '00.461.479/0001-63', modalidade: 'Medicina de Grupo', uf: 'SP', benef: 562740, despesa: 3.02, status: 'Em análise' },
+  { reg: '323080', razao: 'Golden Cross Assistência Internacional de Saúde Ltda.', fantasia: 'Golden Cross', cnpj: '01.518.211/0001-83', modalidade: 'Medicina de Grupo', uf: 'RJ', benef: 151020, despesa: 0.78, status: 'Inativa' },
+];
+
+const QUARTERS = [
+  { q: '1º tri/24', v: 58.2 }, { q: '2º tri/24', v: 61.7 }, { q: '3º tri/24', v: 63.9 }, { q: '4º tri/24', v: 67.4 },
+  { q: '1º tri/25', v: 65.1 }, { q: '2º tri/25', v: 70.8 }, { q: '3º tri/25', v: 74.3 }, { q: '4º tri/25', v: 79.8 },
+];
+
+const MODALIDADES = [
+  { label: 'Medicina de Grupo', pct: 41, color: '#113E32' },
+  { label: 'Cooperativa Médica', pct: 33, color: '#4AD295' },
+  { label: 'Seguradora', pct: 14, color: '#8FBFA9' },
+  { label: 'Autogestão', pct: 8, color: '#C8F169' },
+  { label: 'Filantropia', pct: 4, color: '#2C6E57' },
+];
+
+const CONTAS = [
+  { cod: '41', desc: 'Eventos / Sinistros Conhecidos ou Avisados', grupo: 'Assistência à Saúde', atual: 61.42, anterior: 55.87 },
+  { cod: '411', desc: 'Eventos — Assistência Médico-Hospitalar', grupo: 'Assistência à Saúde', atual: 54.10, anterior: 48.92 },
+  { cod: '4111', desc: 'Consultas Médicas', grupo: 'Médico-Hospitalar', atual: 7.84, anterior: 7.21 },
+  { cod: '4112', desc: 'Exames Complementares', grupo: 'Médico-Hospitalar', atual: 11.36, anterior: 10.05 },
+  { cod: '4113', desc: 'Terapias', grupo: 'Médico-Hospitalar', atual: 6.92, anterior: 5.48 },
+  { cod: '4114', desc: 'Internações', grupo: 'Médico-Hospitalar', atual: 22.65, anterior: 21.37 },
+  { cod: '412', desc: 'Eventos — Assistência Odontológica', grupo: 'Odontológico', atual: 1.98, anterior: 1.91 },
+  { cod: '46', desc: 'Despesas Administrativas', grupo: 'Administrativo', atual: 8.71, anterior: 8.95 },
+  { cod: '43', desc: 'Despesas de Comercialização', grupo: 'Comercial', atual: 3.14, anterior: 2.88 },
+];
+
+const LOGS = [
+  { t: '16:42:08', lvl: 'INFO', msg: 'GET /api/operadoras?uf=PB 200 · 38ms' },
+  { t: '16:41:55', lvl: 'INFO', msg: 'Load concluído: 2.184.906 linhas em demonstracoes_contabeis' },
+  { t: '16:40:12', lvl: 'WARN', msg: 'CNPJ inválido no registro 412449 — enviado para quarentena' },
+  { t: '16:38:47', lvl: 'INFO', msg: 'Transform: normalização de encoding latin-1 → utf-8 (3º trimestre de 2025)' },
+  { t: '16:36:02', lvl: 'INFO', msg: 'Extract: 4T2025.zip baixado de dadosabertos.ans.gov.br (182 MB)' },
+  { t: '16:20:31', lvl: 'ERROR', msg: 'Timeout no lote cadop_ativas.csv — retry 1/3 agendado' },
+];
+
+/* ============ Helpers ============ */
+const cx = (...a) => a.filter(Boolean).join(' ');
+const fmtInt = (n) => n.toLocaleString('pt-BR');
+const fmtBi = (n) => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' bi';
+const variation = (a, b) => ((a - b) / b) * 100;
+
+/* ============ Logo autoral ============ */
+// Conceito: três barras analíticas (camadas Extract/Transform/Load) que, em conjunto,
+// desenham a silhueta de um escudo, atravessadas por um traço de pulso.
+const Logo = ({ size = 36 }) => <Mark size={size} />;
+const Wordmark = ({ light = false }) => <LogoHorizontal negative={light} size={36} />;
+
+/* ============ Core components ============ */
+const Button = ({ variant = 'primary', size = 'md', icon, iconRight, children, className = '', ...p }) => {
+  const v = {
+    primary: 'bg-forest text-white hover:bg-[#0b2d24] shadow-sm',
+    accent: 'bg-mint text-forest hover:bg-[#3cc286]',
+    secondary: 'bg-white text-ink border border-slate-200 hover:border-slate-300 hover:bg-slate-50',
+    ghost: 'text-ink hover:bg-slate-100',
+    danger: 'bg-white text-danger border border-red-200 hover:bg-red-50',
+    dangerSolid: 'bg-danger text-white hover:bg-red-600',
+  }[variant];
+  const s = { sm: 'h-8 px-3 text-xs gap-1.5', md: 'h-10 px-4 text-sm gap-2', lg: 'h-12 px-6 text-[15px] gap-2' }[size];
+  return (
+    <button className={cx('inline-flex items-center justify-center rounded-full font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed', v, s, className)} {...p}>
+      {icon && <Icon name={icon} size={size === 'sm' ? 14 : 16} />}
+      {children}
+      {iconRight && <Icon name={iconRight} size={size === 'sm' ? 14 : 16} />}
+    </button>
+  );
+};
+
+const STATUS = {
+  'Extraído': { cls: 'bg-sky-50 text-sky-700 ring-sky-200', icon: 'Download' },
+  'Em Tratamento': { cls: 'bg-amber-50 text-amber-700 ring-amber-200', icon: 'LoaderCircle', spin: true },
+  'Consolidado': { cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'CircleCheck' },
+  'Falha': { cls: 'bg-red-50 text-red-700 ring-red-200', icon: 'CircleAlert' },
+};
+const StatusBadge = ({ status }) => {
+  const s = STATUS[status];
+  return (
+    <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1', s.cls)}>
+      <span className={s.spin ? 'animate-spin inline-flex' : 'inline-flex'}><Icon name={s.icon} size={13} /></span>{status}
+    </span>
+  );
+};
+
+const Pill = ({ children, tone = 'neutral', className = '' }) => {
+  const t = {
+    neutral: 'bg-slate-100 text-slate-700', forest: 'bg-forest text-white', mint: 'bg-mint/20 text-forest',
+    lime: 'bg-lime text-forest', ok: 'bg-emerald-50 text-emerald-700', danger: 'bg-red-50 text-red-600', warn: 'bg-amber-50 text-amber-700', sage: 'bg-sage text-forest',
+  }[tone];
+  return <span className={cx('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold', t, className)}>{children}</span>;
+};
+
+const DeltaBadge = ({ value, dark = false }) => {
+  const up = value >= 0;
+  if (dark) return <Pill tone="lime"><Icon name={up ? 'TrendingUp' : 'TrendingDown'} size={12} />{up ? '+' : ''}{value.toFixed(1)}%</Pill>;
+  return <Pill tone={up ? 'ok' : 'danger'}><Icon name={up ? 'ArrowUpRight' : 'ArrowDownRight'} size={12} />{up ? '+' : ''}{value.toFixed(1)}%</Pill>;
+};
+
+const SearchInput = ({ value, onChange, placeholder = 'Buscar...', className = '' }) => (
+  <div className={cx('relative', className)}>
+    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted"><Icon name="Search" size={16} /></span>
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+      className="h-10 w-full rounded-full border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-mint focus:ring-4 focus:ring-mint/20" />
+  </div>
+);
+
+const Select = ({ value, onChange, options, icon = 'Filter' }) => (
+  <div className="relative">
+    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"><Icon name={icon} size={14} /></span>
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="h-10 appearance-none rounded-full border border-slate-200 bg-white pl-9 pr-9 text-sm font-medium outline-none focus:border-mint focus:ring-4 focus:ring-mint/20">
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"><Icon name="ChevronDown" size={14} /></span>
+  </div>
+);
+
+const Card = ({ children, className = '', ...p }) => <div className={cx('rounded-2xl bg-white shadow-card', className)} {...p}>{children}</div>;
+
+const KpiCard = ({ variant = 'light', label, value, delta, foot, icon = 'Database' }) => {
+  const dark = variant === 'dark';
+  return (
+    <div className={cx('relative overflow-hidden rounded-2xl p-5', dark ? 'bg-forest text-white shadow-lift' : 'bg-white shadow-card')}>
+      {dark && <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-mint/10" />}
+      <div className="relative flex items-start justify-between">
+        <span className={cx('text-sm font-medium', dark ? 'text-white/70' : 'text-muted')}>{label}</span>
+        <span className={cx('grid h-9 w-9 place-items-center rounded-full', dark ? 'bg-white/10 text-mint' : 'bg-sage text-forest')}><Icon name={icon} size={17} /></span>
+      </div>
+      <div className="relative mt-3 font-display text-[28px] font-bold tracking-tight">{value}</div>
+      <div className="relative mt-3 flex items-center gap-2">
+        {delta !== undefined && <DeltaBadge value={delta} dark={dark} />}
+        <span className={cx('text-xs', dark ? 'text-white/60' : 'text-muted')}>{foot}</span>
+      </div>
+    </div>
+  );
+};
+
+const PillBarChart = ({ data, height = 200, highlightLast = true, unit = 'bi' }) => {
+  const [hover, setHover] = useState(null);
+  const max = Math.max(...data.map((d) => d.v));
+  return (
+    <div className="flex items-end justify-between gap-3" style={{ height }}>
+      {data.map((d, i) => {
+        const h = (d.v / max) * (height - 44);
+        const active = hover === i || (hover === null && highlightLast && i === data.length - 1);
+        return (
+          <div key={d.q} className="flex flex-1 flex-col items-center gap-2" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+            <div className={cx('rounded-full px-2 py-0.5 text-[11px] font-semibold transition-opacity', active ? 'bg-forest text-white opacity-100' : 'opacity-0')}>
+              {d.v.toFixed(1)} {unit}
+            </div>
+            <div className="relative w-full max-w-[44px] rounded-full bg-sage/70" style={{ height: height - 44 }}>
+              <div className={cx('absolute bottom-0 w-full rounded-full transition-all duration-500', active ? 'bg-forest' : 'bg-mint')} style={{ height: h }} />
+            </div>
+            <span className="text-[11px] font-medium text-muted">{d.q}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const Donut = ({ data, size = 170, center = '1.247', sub = 'operadoras' }) => {
+  const r = 62, c = 2 * Math.PI * r;
+  let acc = 0;
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 160 160" width={size} height={size} className="-rotate-90">
+        <circle cx="80" cy="80" r={r} fill="none" stroke="rgba(17,62,50,.08)" strokeWidth="20" />
+        {data.map((d) => {
+          const len = (d.pct / 100) * c;
+          const el = <circle key={d.label} cx="80" cy="80" r={r} fill="none" stroke={d.color} strokeWidth="20"
+            strokeDasharray={`${Math.max(len - 3, 0)} ${c}`} strokeDashoffset={-acc} strokeLinecap="round" />;
+          acc += len;
+          return el;
+        })}
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">
+        <div><div className="font-display text-2xl font-bold text-forest">{center}</div><div className="text-[11px] font-medium text-forest/70">{sub}</div></div>
+      </div>
+    </div>
+  );
+};
+
+const DonutCard = ({ title = 'Distribuição por modalidade', className = '' }) => (
+  <div className={cx('rounded-2xl bg-sage p-5', className)}>
+    <div className="flex items-center justify-between">
+      <h3 className="font-display text-[15px] font-bold text-forest">{title}</h3>
+      <span className="grid h-8 w-8 place-items-center rounded-full bg-white/60 text-forest"><Icon name="PieChart" size={15} /></span>
+    </div>
+    <div className="mt-4 flex justify-center"><Donut data={MODALIDADES} /></div>
+    <ul className="mt-5 space-y-2">
+      {MODALIDADES.map((m) => (
+        <li key={m.label} className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-2 text-forest"><span className="h-2.5 w-2.5 rounded-full ring-1 ring-forest/20" style={{ background: m.color }} />{m.label}</span>
+          <span className="font-semibold text-forest">{m.pct}%</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
+const EndpointWidget = ({ compact = false }) => {
+  const [state, setState] = useState({ status: 'online', latency: 42, checking: false, last: 'há 12 min' });
+  const ping = () => {
+    setState((s) => ({ ...s, checking: true }));
+    setTimeout(() => setState({ status: 'online', latency: 28 + Math.round(Math.random() * 40), checking: false, last: 'agora' }), 900);
+  };
+  return (
+    <div className="rounded-2xl bg-forest p-4 text-white">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-[.14em] text-white/60">Worker ETL</span>
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-mint"><span className="pulse-dot h-2 w-2 rounded-full bg-mint" />Online</span>
+      </div>
+      <div className="mt-2 text-sm font-semibold">API Flask: Conectada</div>
+      <div className="mt-0.5 text-xs text-white/60">Última sync: {state.last} · {state.latency}ms</div>
+      {!compact && (
+        <>
+          <code className="mt-3 block truncate rounded-lg bg-white/10 px-2.5 py-1.5 text-[11px] text-mint">http://localhost:5000/api</code>
+          <button onClick={ping} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-mint py-2 text-xs font-bold text-forest hover:bg-[#3cc286]">
+            <span className={state.checking ? 'animate-spin inline-flex' : 'inline-flex'}><Icon name={state.checking ? 'LoaderCircle' : 'Activity'} size={14} /></span>
+            {state.checking ? 'Testando...' : 'Testar healthcheck'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+const Toast = ({ msg }) => msg ? (
+  <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 fade-up rounded-full bg-ink px-5 py-3 text-sm font-medium text-white shadow-lift flex items-center gap-2">
+    <Icon name="CircleCheck" size={16} className="text-mint" />{msg}
+  </div>
+) : null;
+
+const useToast = () => {
+  const [msg, setMsg] = useState(null);
+  const t = useRef();
+  const show = (m) => { setMsg(m); clearTimeout(t.current); t.current = setTimeout(() => setMsg(null), 2200); };
+  return [msg, show];
+};
+
+/* ============ MODO 1 — Design System ============ */
+const DSCard = ({ title, wide, children, className = '' }) => (
+  <div className={cx('flex min-w-0 flex-col gap-3.5 rounded-2xl bg-[#F6F8F7] p-[22px]', wide && 'md:col-span-2', className)}>
+    <h2 className="text-xs font-bold uppercase tracking-[.08em] text-muted">{title}</h2>
+    {children}
+  </div>
+);
+const Row = ({ k, v }) => (
+  <div className="flex justify-between gap-3 border-b border-slate-200 py-2 text-[13px] last:border-0">
+    <span className="text-muted">{k}</span><b className="text-right font-semibold tabular-nums">{v}</b>
+  </div>
+);
+const Cap = ({ children }) => <span className="text-[11px] leading-snug tracking-wide text-muted">{children}</span>;
+
+// Símbolo "Cruz de Dados": cruz da saúde em traço contínuo (rounded) + 3 barras analíticas
+// crescentes no núcleo (ETL -> insight) + ponto do beneficiário no topo da curva de crescimento.
+const Mark = ({ size = 48, color = '#4AD295', bg = null, sw = 2.2 }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true" className="shrink-0">
+    {bg && <rect width="48" height="48" rx="14" fill={bg} />}
+    <path d="M19 7h10a2 2 0 0 1 2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-6a2 2 0 0 0-2 2v8a2 2 0 0 1-2 2H19a2 2 0 0 1-2-2v-8a2 2 0 0 0-2-2H9a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h6a2 2 0 0 0 2-2V9a2 2 0 0 1 2-2Z"
+      stroke={color} strokeWidth={sw} strokeLinejoin="round" />
+    <path d="M20 31v-4M24 31v-8M28 31v-12" stroke={color} strokeWidth={sw} strokeLinecap="round" />
+    <circle cx="35.5" cy="12.5" r="2.6" fill={color} />
+  </svg>
+);
+const MiniIcon = ({ kind }) => {
+  const c = { stroke: '#FFFFFF', strokeWidth: 1.6, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' };
+  return (
+    <svg width="54" height="54" viewBox="0 0 48 48">
+      {kind === 'saude' && <path {...c} d="M19 7h10a2 2 0 0 1 2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-6a2 2 0 0 0-2 2v8a2 2 0 0 1-2 2H19a2 2 0 0 1-2-2v-8a2 2 0 0 0-2-2H9a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h6a2 2 0 0 0 2-2V9a2 2 0 0 1 2-2Z" />}
+      {kind === 'dados' && <path {...c} d="M12 38V30M20 38V24M28 38V18M36 38V10M8 40h32" />}
+      {kind === 'fluxo' && <><path {...c} d="M8 16h22l-5-5M40 32H18l5 5" /><circle {...c} cx="36" cy="16" r="3" /><circle {...c} cx="12" cy="32" r="3" /></>}
+      {kind === 'pessoa' && <><circle {...c} cx="24" cy="15" r="5" /><path {...c} d="M12 38c1-7 6-11 12-11s11 4 12 11" /></>}
+    </svg>
+  );
+};
+
+const LogoHorizontal = ({ negative = false, size = 44 }) => (
+  <div className="flex items-center gap-3">
+    <Mark size={size} bg={negative ? null : '#113E32'} color="#4AD295" />
+    <div className="leading-none">
+      <div className={cx('font-display text-[22px] font-extrabold tracking-tight', negative ? 'text-mint' : 'text-forest')}>intuitivecare</div>
+      <div className={cx('mt-1 whitespace-nowrap text-[9px] font-semibold uppercase tracking-[.06em]', negative ? 'text-white/60' : 'text-muted')}>Controle e Tratamento de dados</div>
+    </div>
+  </div>
+);
+
+const DesignSystem = ({ onEnter }) => {
+  const [toast, showToast] = useToast();
+  const [q, setQ] = useState('');
+  const [chip, setChip] = useState('Medicina de Grupo');
+  const copy = (hex) => {
+    try { navigator.clipboard.writeText(hex).then(() => showToast(`${hex} copiado`), () => showToast(hex)); } catch (e) { showToast(hex); }
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col items-center gap-10 overflow-x-hidden bg-white pb-16">
+      {/* Hero */}
+      <header className="flex w-full flex-col items-center gap-3 px-4 pt-14">
+        <LogoHorizontal size={56} />
+        <span className="mt-4 text-xs font-semibold uppercase tracking-[.12em] text-muted">Design System · Intuitive Care · Controle e Tratamento de dados</span>
+        <h1 className="max-w-3xl text-balance text-center font-display text-[22px] sm:text-[28px] font-semibold text-ink">Tokens, componentes e fluxos da plataforma de dados da ANS</h1>
+        <p className="max-w-2xl text-center text-sm text-muted">Pipeline ETL de dados públicos da Agência Nacional de Saúde Suplementar · Desktop-only 1440px+ · perfis Administrador e Consumidor</p>
+      </header>
+
+      <section className="grid w-full max-w-[1160px] grid-cols-1 gap-4 px-4 md:grid-cols-2 xl:grid-cols-4">
+        {/* ===== LOGOMARCA ===== */}
+        <DSCard title="Logomarca Intuitive Care — 3 variações" wide className="md:col-span-2 xl:col-span-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <div className="grid min-h-[150px] place-items-center px-4 lg:aspect-[16/9] rounded-xl border border-slate-200 bg-white"><LogoHorizontal /></div>
+            <div className="grid min-h-[150px] place-items-center px-4 lg:aspect-[16/9] rounded-xl bg-white" style={{ backgroundImage: 'linear-gradient(45deg,#EEE 25%,transparent 25%),linear-gradient(-45deg,#EEE 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#EEE 75%),linear-gradient(-45deg,transparent 75%,#EEE 75%)', backgroundSize: '14px 14px', backgroundPosition: '0 0,0 7px,7px -7px,-7px 0' }}>
+              <div className="grid h-24 w-24 place-items-center rounded-full bg-forest shadow-lift"><Mark size={62} /></div>
+            </div>
+            <div className="grid min-h-[150px] place-items-center px-4 lg:aspect-[16/9] rounded-xl bg-forest"><LogoHorizontal negative /></div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3"><Cap>Horizontal · sidebar, login, documentos e e-mails</Cap><Cap>Selo circular · avatar, favicon e ícone do app</Cap><Cap>Negativo · fundos Forest e card Hero KPI</Cap></div>
+        </DSCard>
+
+        <div className="grid grid-cols-1 gap-6 rounded-2xl bg-forest p-6 text-white md:col-span-2 md:p-8 lg:grid-cols-12 xl:col-span-4">
+          <div className="flex flex-col gap-4 lg:col-span-5">
+            <span className="flex items-center gap-2 text-sm font-semibold"><span className="h-5 w-3 rounded bg-mint" />Conceito da marca</span>
+            <h3 className="font-display text-[26px] font-extrabold leading-tight">Cruz de Dados</h3>
+            <p className="text-sm leading-relaxed text-white/75">A cruz é o sinal universal da saúde. Aqui ela é desenhada em um único traço contínuo — o mesmo caminho que o dado percorre da ANS até o dashboard. No núcleo, três barras crescentes representam as etapas <b className="text-white">Extract → Transform → Load</b> e a evolução das despesas assistenciais. O ponto no topo da curva é o <b className="text-white">beneficiário</b>: o motivo pelo qual o dado existe.</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">
+              {[['#113E32', 'Forest · confiança regulatória'], ['#4AD295', 'Mint · dado vivo, saúde'], ['#DCE7E2', 'Sage · análise calma'], ['#FFFFFF', 'Branco · transparência']].map(([h, l]) => (
+                <div key={h} className="flex items-center gap-2"><i className="h-5 w-5 rounded-md ring-1 ring-white/30" style={{ background: h }} /><span className="text-white/80"><b className="font-mono text-white">{h}</b> {l}</span></div>
+              ))}
+            </div>
+          </div>
+          <div className="grid place-items-center lg:col-span-3">
+            <div className="relative grid h-56 w-56 place-items-center">
+              <svg className="absolute inset-0" viewBox="0 0 224 224" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="1">
+                <path d="M79 0v224M145 0v224M0 79h224M0 145h224M37 30v164M187 30v164M30 37h164M30 187h164" />
+              </svg>
+              <Mark size={190} sw={1.8} />
+            </div>
+          </div>
+          <div className="flex flex-col justify-center gap-5 lg:col-span-4">
+            <div className="flex items-center justify-between">
+              {[['saude', 'Saúde'], ['dados', 'Dados ANS'], ['fluxo', 'Fluxo ETL'], ['pessoa', 'Beneficiário']].map(([k, l], i) => (
+                <React.Fragment key={k}>
+                  {i > 0 && <span className="text-sm font-bold text-white/60">+</span>}
+                  <div className="flex flex-col items-center gap-1.5"><MiniIcon kind={k} /><span className="text-[11px] font-semibold">{l}</span></div>
+                </React.Fragment>
+              ))}
+            </div>
+            <div className="rounded-xl bg-white/[.06] p-4 text-[12px] leading-relaxed text-white/70">
+              <b className="text-white">Grid de construção 48u.</b> Arms de 14u, cantos de 2u, traço de 2,2u. As barras ocupam 4, 8 e 12u (proporção 1:2:3). O ponto alinha-se ao eixo da diagonal de crescimento das barras.
+            </div>
+          </div>
+        </div>
+
+        <DSCard title="Uso da marca">
+          <Row k="Tamanho mín. símbolo" v="20px" />
+          <Row k="Tamanho mín. horizontal" v="120px" />
+          <Row k="Favicon" v="Selo · 32px" />
+          <Row k="Sidebar" v="Horizontal · 36px" />
+          <Cap>Não distorcer, não girar, não aplicar sombra nem trocar as cores do pulso.</Cap>
+        </DSCard>
+
+        <DSCard title="Não fazer">
+          <div className="grid grid-cols-3 gap-2">
+            {[['rotate-12', 'Girar'], ['opacity-40', 'Transparência'], ['hue-rotate-90', 'Recolorir']].map(([c, l]) => (
+              <div key={l} className="flex flex-col items-center gap-1">
+                <div className="relative grid h-16 w-full place-items-center rounded-lg bg-white">
+                  <div className={c}><Mark size={34} bg="#113E32" /></div>
+                  <span className="absolute inset-x-3 top-1/2 h-0.5 -rotate-12 bg-danger" />
+                </div>
+                <span className="text-[10px] text-muted">{l}</span>
+              </div>
+            ))}
+          </div>
+          <Cap>Não usar o símbolo sobre fotos nem sobre Mint sem o fundo Forest.</Cap>
+        </DSCard>
+
+        {/* ===== PALETA ===== */}
+        <DSCard title="Paleta" wide>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {COLORS.map((c) => (
+              <button key={c.hex} onClick={() => copy(c.hex)} className="group flex items-center gap-2.5 rounded-lg p-1 text-left hover:bg-white">
+                <i className="h-8 w-8 shrink-0 rounded-md border border-slate-200" style={{ background: c.hex }} />
+                <div className="flex min-w-0 flex-col text-[11px] leading-tight">
+                  <b className="font-semibold text-ink">{c.name}</b>
+                  <span className="font-mono text-muted">{c.hex} · {c.token}</span>
+                </div>
+                <span className="ml-auto text-muted opacity-0 group-hover:opacity-100"><Icon name="Copy" size={13} /></span>
+              </button>
+            ))}
+          </div>
+          <Cap>Clique para copiar o Hex. Texto sobre Forest é sempre branco; sobre Mint e Lime, sempre Forest.</Cap>
+        </DSCard>
+
+        <DSCard title="Tokens de layout — desktop" wide>
+          <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
+            <div>
+              <Row k="Viewport alvo" v="1440px+" />
+              <Row k="Sidebar fixa" v="260px" />
+              <Row k="Topbar" v="64px" />
+              <Row k="Grid" v="12 colunas" />
+              <Row k="Gutter / margem" v="24px / 40px" />
+            </div>
+            <div>
+              <Row k="Radius card" v="16px · rounded-2xl" />
+              <Row k="Radius botão / input" v="999px · pill" />
+              <Row k="Botão / input" v="40px" />
+              <Row k="Grid base" v="4px" />
+              <Row k="Sombra card" v="0 4 16 / 5%" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex w-14 items-end rounded-md bg-forest p-1 text-[8px] font-bold text-white/70">260</div>
+            <div className="grid min-w-0 flex-1 grid-cols-12 gap-1">{Array.from({ length: 12 }).map((_, i) => <div key={i} className="grid h-10 place-items-center rounded bg-mint/25 text-[9px] font-bold text-forest">{i + 1}</div>)}</div>
+          </div>
+        </DSCard>
+
+        {/* ===== TIPOGRAFIA ===== */}
+        <DSCard title="Tipografia" wide>
+          {[
+            ['font-display text-[30px] font-extrabold tracking-tight', 'R$ 79,8 bi', 'Valor Hero KPI · Plus Jakarta Sans 30 / 800 · tabular'],
+            ['font-display text-[28px] font-extrabold tracking-tight', 'Painel Geral', 'Título de página · Plus Jakarta Sans 28 / 800'],
+            ['font-display text-[17px] font-bold', 'Evolução de despesas assistenciais', 'Título de card · Plus Jakarta Sans 17 / 700'],
+            ['text-sm', 'Operadoras ativas com registro válido na ANS.', 'Corpo e tabela · Inter 14 / 400'],
+            ['font-mono text-sm font-semibold text-forest', '326305 · 29.309.127/0001-79', 'Registro ANS / CNPJ / código de conta · Mono 14 / 600'],
+            ['text-[11px] font-bold uppercase tracking-[.14em] text-muted', 'Conta', 'Seção de sidebar e eyebrow · Inter 11 / 700 · +14%'],
+          ].map(([cls, s, spec]) => (
+            <div key={spec} className="flex flex-col gap-1 border-b border-slate-200 py-2.5 last:border-0">
+              <span className={cls}>{s}</span><Cap>{spec}</Cap>
+            </div>
+          ))}
+        </DSCard>
+
+        <DSCard title="Botões" wide>
+          <div className="flex flex-wrap gap-2">
+            <Button icon="Play">Executar Pipeline</Button>
+            <Button variant="accent" icon="Download">Exportar CSV</Button>
+            <Button variant="secondary">Secundário</Button>
+            <Button variant="ghost">Ghost</Button>
+            <Button variant="danger" icon="LogOut">Encerrar Sessão</Button>
+          </div>
+          <Row k="Altura / padding" v="40px / 16px" />
+          <Row k="Fonte" v="Inter 14 / 600" />
+          <Row k="Hover" v="Forest −10% · Mint −6%" />
+          <Row k="Destrutivo" v="Contorno vermelho, nunca ação primária" />
+        </DSCard>
+
+        <DSCard title="Inputs e filtros" wide>
+          <SearchInput value={q} onChange={setQ} placeholder="Buscar por Registro ANS, Razão Social ou CNPJ" />
+          <div className="flex flex-wrap gap-2">
+            <Select value="Todas UFs" onChange={() => {}} options={['Todas UFs', 'SP', 'PB']} icon="MapPin" />
+            <Select value="2025" onChange={() => {}} options={['2025', '2024']} icon="CalendarDays" />
+            <Select value="4º trimestre" onChange={() => {}} options={['1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre']} icon="Calendar" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {['Medicina de Grupo', 'Cooperativa Médica', 'Seguradora', 'Autogestão'].map((c) => (
+              <button key={c} onClick={() => setChip(c)} className={cx('h-8 rounded-full border px-3 text-xs font-medium', chip === c ? 'border-forest bg-forest text-white' : 'border-slate-200 bg-white text-muted')}>{c}</button>
+            ))}
+          </div>
+          <Cap>Foco: borda Mint + halo 4px Mint 20%. Filtros atualizam a lista sem botão de enviar.</Cap>
+        </DSCard>
+
+        {/* ===== STATUS ===== */}
+        <DSCard title="Status da pipeline" wide>
+          <div className="flex flex-wrap gap-2">{Object.keys(STATUS).map((s) => <StatusBadge key={s} status={s} />)}</div>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+            {[['Extract', 'Extraído'], ['Transform', 'Em Tratamento'], ['Load', 'Consolidado']].map(([k, s], i) => (
+              <React.Fragment key={k}>{i > 0 && <Icon name="ChevronRight" size={14} className="text-muted" />}<span className={cx('rounded-lg border px-2.5 py-1.5', i === 1 ? 'border-forest bg-forest text-white' : 'border-slate-300 bg-white')}>{k}</span></React.Fragment>
+            ))}
+          </div>
+          <Cap>Falha mantém o lote em quarentena e oferece Retry (até 3 tentativas).</Cap>
+        </DSCard>
+
+        <DSCard title="Badges">
+          <div className="flex flex-wrap gap-1.5"><Pill tone="sage">Medicina de Grupo</Pill><Pill tone="mint">Cooperativa</Pill><Pill tone="neutral">Seguradora</Pill></div>
+          <div className="flex flex-wrap gap-1.5"><DeltaBadge value={18.4} /><DeltaBadge value={-10.2} /><DeltaBadge value={18.4} dark /></div>
+          <div className="flex flex-wrap gap-1.5"><StatusPill s="Ativa" /><StatusPill s="Em análise" /><StatusPill s="Inativa" /></div>
+          <Cap>Lime só sobre Forest (Hero KPI).</Cap>
+        </DSCard>
+
+        <DSCard title="Perfis de acesso · Administrador × Consumidor" wide className="md:col-span-2 xl:col-span-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl bg-forest p-5 text-white">
+              <div className="flex items-center gap-2"><Pill tone="lime"><Icon name="ShieldCheck" size={12} />ADMIN</Pill><span className="text-sm font-semibold">Administrador</span></div>
+              <p className="mt-3 text-sm leading-relaxed text-white/80"><b className="text-white">Quem cuida dos dados.</b> Pode consultar e também alterar o que está no banco: corrige cadastros de operadoras, inativa registros e audita os lotes importados da ANS.</p>
+              <div className="mt-3 font-mono text-[11px] text-mint">banco: leitura + escrita</div>
+            </div>
+            <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+              <div className="flex items-center gap-2"><Pill tone="sage"><Icon name="Eye" size={12} />CONSUMIDOR</Pill><span className="text-sm font-semibold">Consumidor</span></div>
+              <p className="mt-3 text-sm leading-relaxed text-slate-600"><b className="text-ink">Quem usa os dados.</b> Só consulta e exporta. Vê exatamente as mesmas operadoras e despesas, mas nada do que ele faz altera o banco.</p>
+              <div className="mt-3 font-mono text-[11px] text-forest">banco: somente leitura</div>
+            </div>
+          </div>
+          <div className="overflow-x-auto rounded-xl bg-white">
+            <table className="w-full min-w-[560px] text-[13px]">
+              <thead className="bg-forest text-left text-[11px] uppercase tracking-wider text-white">
+                <tr><th className="px-3 py-2">Ação na plataforma</th><th className="px-3 py-2">O que acontece no banco</th><th className="px-3 py-2 text-center">Admin</th><th className="px-3 py-2 text-center">Consumidor</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {[
+                  ['Ver painel, operadoras e despesas', 'Leitura (SELECT)', true, true],
+                  ['Filtrar por UF, ano e trimestre', 'Leitura (SELECT)', true, true],
+                  ['Exportar CSV / PDF', 'Leitura (SELECT)', true, true],
+                  ['Editar dados de uma operadora', 'Atualiza o registro (UPDATE)', true, false],
+                  ['Inativar ou reativar operadora', 'Altera o status (UPDATE)', true, false],
+                  ['Cadastrar nova operadora', 'Cria registro (INSERT)', true, false],
+                  ['Auditar lote de demonstrações contábeis', 'Marca o lote como auditado (UPDATE)', true, false],
+                  ['Editar o próprio perfil', 'Atualiza só o próprio usuário', true, true],
+                ].map(([acao, banco, ad, co]) => (
+                  <tr key={acao}>
+                    <td className="px-3 py-2 font-medium">{acao}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-muted">{banco}</td>
+                    {[ad, co].map((v, i) => (
+                      <td key={i} className="px-3 py-2 text-center">
+                        <span className={cx('inline-grid h-6 w-6 place-items-center rounded-full', v ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400')}><Icon name={v ? 'Check' : 'Minus'} size={13} /></span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="grid gap-3 text-[13px] sm:grid-cols-3">
+            <div className="rounded-xl bg-white p-3"><b className="text-ink">Como aparece na tela</b><div className="mt-1 text-muted">Admin vê "Gerenciar", "Nova operadora" e "Auditar lote". Consumidor vê "Detalhes" e "Exportar".</div></div>
+            <div className="rounded-xl bg-white p-3"><b className="text-ink">Como identificar</b><div className="mt-1 text-muted">Selo do perfil no topo e no Perfil: <span className="font-semibold text-forest">ADMIN</span> em Forest, <span className="font-semibold text-forest">CONSUMIDOR</span> em Sage.</div></div>
+            <div className="rounded-xl bg-white p-3"><b className="text-ink">Onde fica no banco</b><div className="mt-1 text-muted">Coluna <code className="text-forest">perfil</code> da tabela de usuários: <code className="text-forest">ADMIN</code> ou <code className="text-forest">CONSUMIDOR</code>.</div></div>
+          </div>
+          <Cap>Regra de interface: botões que alteram o banco não aparecem para o Consumidor (não ficam só desabilitados). Operadoras inativas aparecem apenas para o Admin.</Cap>
+        </DSCard>
+
+        {/* ===== KPI ===== */}
+        <DSCard title="Cards de KPI · Dark Forest e Light" wide className="md:col-span-2 xl:col-span-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <KpiCard variant="dark" label="Total de despesas processadas · 4º trimestre de 2025" value="R$ 79,8 bi" delta={18.4} foot="vs último trimestre" icon="Wallet" />
+            <KpiCard label="Registros extraídos da ANS" value="2.184.906" delta={6.2} foot="linhas no último lote" icon="Database" />
+            <KpiCard label="Lotes com falha" value="3" delta={-10.2} foot="nas últimas 24h" icon="TriangleAlert" />
+          </div>
+          <Cap>Apenas um Hero KPI (Dark Forest) por tela, sempre na primeira posição. Badge de variação: Lime no escuro, verde/vermelho no claro.</Cap>
+        </DSCard>
+
+        {/* ===== DATA VIZ ===== */}
+        <DSCard title="Gráfico de barras em pílula" wide className="md:col-span-2 xl:col-span-3">
+          <div className="overflow-x-auto rounded-2xl bg-white p-5 shadow-card">
+            <div className="mb-4 flex min-w-[520px] items-center justify-between"><b className="font-display text-[15px]">Despesas assistenciais por trimestre</b><Pill tone="ok"><Icon name="ArrowUpRight" size={12} />+37,1%</Pill></div>
+            <div className="min-w-[520px]"><PillBarChart data={QUARTERS} height={220} /></div>
+          </div>
+          <Cap>Trilho Sage 70% · barra Mint · barra ativa/hover Forest com tooltip. Passe o mouse.</Cap>
+        </DSCard>
+
+        <DSCard title="Rosca · card sálvia" className="xl:col-span-1">
+          <DonutCard title="Modalidades" className="!p-4" />
+        </DSCard>
+
+        {/* ===== Tabela ===== */}
+        <DSCard title="Tabela de dados" wide className="md:col-span-2 xl:col-span-3">
+          <div className="overflow-x-auto rounded-xl bg-white">
+            <table className="w-full text-[13px]">
+              <thead className="bg-forest text-left text-[11px] uppercase tracking-wider text-white"><tr><th className="px-3 py-2">Registro ANS</th><th className="px-3 py-2">Operadora</th><th className="px-3 py-2">Modalidade</th><th className="px-3 py-2">UF</th><th className="px-3 py-2">Status</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {OPERADORAS.slice(0, 4).map((o) => (
+                  <tr key={o.reg} className="hover:bg-surface"><td className="px-3 py-2 font-mono font-semibold text-forest">{o.reg}</td><td className="px-3 py-2 font-medium">{o.fantasia}</td><td className="px-3 py-2"><ModalidadePill m={o.modalidade} /></td><td className="px-3 py-2">{o.uf}</td><td className="px-3 py-2"><StatusPill s={o.status} /></td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Cap>Cabeçalho Forest, linha clicável abre gaveta de detalhes à direita (480px).</Cap>
+        </DSCard>
+
+        <DSCard title="Widget do endpoint Flask" className="xl:col-span-1">
+          <EndpointWidget />
+          <Cap>Fixo no rodapé da sidebar. Healthcheck clicável.</Cap>
+        </DSCard>
+
+        {/* ===== Navegação ===== */}
+        <DSCard title="Sidebar desktop" className="xl:col-span-2">
+          <div className="flex flex-col gap-1 rounded-xl bg-white p-3 text-[12px]">
+            <div className="mb-2 flex items-center gap-2"><Mark size={22} bg="#113E32" /><b className="font-display text-[13px] text-forest">intuitivecare</b></div>
+            <span className="px-2 text-[9px] font-bold uppercase tracking-wider text-muted">Menu</span>
+            <span className="rounded-full bg-forest px-3 py-1.5 font-medium text-white">Painel Geral</span>
+            <span className="px-3 py-1.5 text-slate-600">Operadoras ANS</span>
+            <span className="px-3 py-1.5 text-slate-600">Despesas Contábeis</span>
+            <span className="mt-1 px-2 text-[9px] font-bold uppercase tracking-wider text-muted">Conta</span>
+            <span className="px-3 py-1.5 text-slate-600">Configurações de Perfil</span>
+          </div>
+          <Cap>Item ativo em pílula Forest. Sem bottom navigation.</Cap>
+        </DSCard>
+
+        <DSCard title="Estados de interação" className="xl:col-span-2">
+          <Row k="Hover card" v="sombra lift · −2px" />
+          <Row k="Foco" v="halo Mint 4px" />
+          <Row k="Desabilitado" v="opacidade 50%" />
+          <Row k="Carregando" v="spinner + rótulo" />
+          <Row k="Linha de tabela" v="fundo Surface" />
+          <Cap>Nunca texto Mint sobre fundo branco.</Cap>
+        </DSCard>
+      </section>
+
+      {/* CTA */}
+      <div className="flex flex-col items-center gap-5 px-4 pt-6">
+                <button onClick={onEnter} className="inline-flex items-center gap-2.5 rounded-xl bg-forest px-6 sm:px-8 py-4 text-[15px] font-bold text-white shadow-lift transition hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-mint">
+          <Icon name="Monitor" size={20} />Acessar Fluxo de Telas<Icon name="ArrowRight" size={18} />
+        </button>
+      </div>
+      <Toast msg={toast} />
+    </div>
+  );
+};
+
+/* ============ MODO 2 — Protótipo ============ */
+const USERS = {
+  admin: { name: 'Luiza Leblanc', role: 'Analista ANS', email: 'admin@intuitivecare.com.br', id: 1, perfil: 'ADMIN', initials: 'LL' },
+  consumer: { name: 'Rafael Monteiro', role: 'Analista Externo', email: 'rafael.monteiro@consultoria.com.br', id: 27, perfil: 'CONSUMIDOR', initials: 'RM' },
+};
+
+const Sidebar = ({ page, setPage, isAdmin }) => {
+  const Item = ({ id, icon, label, badge }) => (
+    <button onClick={() => setPage(id)}
+      className={cx('flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition', page === id ? 'bg-forest text-white shadow-sm' : 'text-slate-600 hover:bg-surface hover:text-ink')}>
+      <Icon name={icon} size={17} />{label}
+      {badge && <span className={cx('ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold', page === id ? 'bg-mint text-forest' : 'bg-sage text-forest')}>{badge}</span>}
+    </button>
+  );
+  const Group = ({ label, children, extra }) => (
+    <div className="mt-6">
+      <div className="mb-2 flex items-center gap-2 px-4 text-[11px] font-bold uppercase tracking-[.14em] text-muted">{label}{extra}</div>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+  return (
+    <aside className="fixed left-0 top-0 flex h-screen w-[260px] flex-col border-r border-slate-200/70 bg-white px-4 pb-5 pt-[76px]">
+      <div className="px-2"><Wordmark /></div>
+      <Group label="Menu">
+        <Item id="dashboard" icon="LayoutDashboard" label="Painel Geral" />
+        <Item id="operadoras" icon="Building2" label="Operadoras ANS" />
+        <Item id="despesas" icon="Receipt" label="Despesas Contábeis" />
+      </Group>
+      <Group label="Conta"><Item id="perfil" icon="UserCog" label="Configurações de Perfil" /></Group>
+    </aside>
+  );
+};
+
+const Topbar = ({ user, title, subtitle, setPage, onExport }) => (
+  <div className="flex items-center justify-between gap-6">
+    <div>
+      <h1 className="font-display text-[28px] font-extrabold tracking-tight">{title}</h1>
+      <p className="mt-0.5 text-sm text-muted">{subtitle}</p>
+    </div>
+    <div className="flex items-center gap-3">
+      <SearchInput value="" onChange={() => {}} placeholder="Buscar operadora, CNPJ, conta..." className="w-[300px]" />
+      {onExport && <Button variant="secondary" icon="Download" onClick={onExport}>Exportar</Button>}
+      <button onClick={() => setPage('perfil')} className="flex items-center gap-2.5 rounded-full bg-white py-1 pl-1 pr-4 shadow-card hover:shadow-lift">
+        {user.photo ? <img src={user.photo} alt="" className="h-8 w-8 rounded-full object-cover" /> : <span className="grid h-8 w-8 place-items-center rounded-full bg-forest text-xs font-bold text-mint">{user.initials}</span>}
+        <span className="text-left leading-tight"><span className="block text-sm font-semibold">{user.name}</span><span className="block text-[11px] text-muted">{user.perfil}</span></span>
+      </button>
+    </div>
+  </div>
+);
+
+/* ---- Dashboard ---- */
+const PipelineCard = ({ toast }) => {
+  const initial = [
+    { k: 'Extract', d: 'Download ZIPs do portal de dados abertos ANS', p: 100, s: 'Extraído' },
+    { k: 'Transform', d: 'Limpeza, normalização de CNPJ e encoding', p: 100, s: 'Consolidado' },
+    { k: 'Load', d: 'Carga em demonstracoes_contabeis (PostgreSQL)', p: 100, s: 'Consolidado' },
+  ];
+  const [stages, setStages] = useState(initial);
+  const [running, setRunning] = useState(false);
+  const run = () => {
+    if (running) return;
+    setRunning(true);
+    setStages(initial.map((s) => ({ ...s, p: 0, s: 'Extraído' })));
+    let step = 0, prog = 0;
+    const iv = setInterval(() => {
+      prog += 10;
+      setStages((prev) => prev.map((s, i) => {
+        if (i < step) return { ...s, p: 100, s: 'Consolidado' };
+        if (i === step) return { ...s, p: Math.min(prog, 100), s: 'Em Tratamento' };
+        return { ...s, p: 0, s: 'Extraído' };
+      }));
+      if (prog >= 100) { step += 1; prog = 0; }
+      if (step > 2) {
+        clearInterval(iv);
+        setStages(initial);
+        setRunning(false);
+        toast('Pipeline concluída · 2.184.906 linhas carregadas');
+      }
+    }, 120);
+  };
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-display text-[17px] font-bold">Pipeline ETL · Lote do 4º trimestre de 2025</h3>
+          <p className="text-sm text-muted">Agendada diariamente às 03:00 · Última execução há 12 min</p>
+        </div>
+        <Button icon={running ? undefined : 'Play'} onClick={run} disabled={running}>
+          {running ? <><span className="animate-spin inline-flex"><Icon name="LoaderCircle" size={16} /></span>Executando...</> : 'Executar Pipeline Agora'}
+        </Button>
+      </div>
+      <div className="mt-5 grid grid-cols-3 gap-4">
+        {stages.map((s, i) => (
+          <div key={s.k} className="rounded-2xl bg-surface p-4">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-sm font-bold"><span className="grid h-6 w-6 place-items-center rounded-full bg-forest text-[11px] text-mint">{i + 1}</span>{s.k}</span>
+              <StatusBadge status={s.s} />
+            </div>
+            <p className="mt-2 text-xs text-muted">{s.d}</p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+              <div className="h-full rounded-full bg-mint transition-all duration-150" style={{ width: `${s.p}%` }} />
+            </div>
+            <div className="mt-1.5 text-right text-[11px] font-semibold text-forest">{s.p}%</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
+const TopOperadoras = ({ uf }) => {
+  const list = OPERADORAS.filter((o) => o.status !== 'Inativa' && (uf === 'Todas UFs' || o.uf === uf)).sort((a, b) => b.despesa - a.despesa).slice(0, 6);
+  const max = Math.max(...list.map((o) => o.despesa), 1);
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-[17px] font-bold">Maiores operadoras por despesa</h3>
+        <Pill tone="sage">{uf}</Pill>
+      </div>
+      <div className="mt-5 space-y-4">
+        {list.length === 0 && <p className="text-sm text-muted">Nenhuma operadora ativa para esta UF no recorte.</p>}
+        {list.map((o, i) => (
+          <div key={o.reg} className="flex items-center gap-4">
+            <span className="w-5 text-sm font-bold text-muted">{i + 1}</span>
+            <div className="flex-1">
+              <div className="flex items-center justify-between text-sm"><span className="font-semibold">{o.fantasia}</span><span className="font-semibold text-forest">{fmtBi(o.despesa)}</span></div>
+              <div className="mt-1.5 h-2 rounded-full bg-surface"><div className="h-full rounded-full bg-mint" style={{ width: `${(o.despesa / max) * 100}%` }} /></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
+const Dashboard = ({ isAdmin, toast }) => {
+  const [uf, setUf] = useState('Todas UFs');
+  const [ano, setAno] = useState('2025');
+  const [tri, setTri] = useState('4º trimestre');
+  const triIdx = (ano === '2024' ? 0 : 4) + parseInt(tri);
+  if (isAdmin) {
+    return (
+      <div className="grid grid-cols-12 gap-6 fade-up">
+        <div className="col-span-4"><KpiCard variant="dark" label="Total de despesas processadas · 4º trimestre de 2025" value="R$ 79,8 bi" delta={18.4} foot="vs último trimestre" icon="Wallet" /></div>
+        <div className="col-span-4"><KpiCard label="Registros extraídos da ANS" value="2.184.906" delta={6.2} foot="linhas no último lote" icon="Database" /></div>
+        <div className="col-span-4"><KpiCard label="Operadoras ativas" value="1.247" delta={-1.3} foot="cadastro CADOP" icon="Building2" /></div>
+        <Card className="col-span-8 p-6">
+          <div className="flex items-center justify-between">
+            <div><h3 className="font-display text-[17px] font-bold">Evolução de despesas assistenciais</h3><p className="text-sm text-muted">Eventos indenizáveis líquidos · R$ bilhões por trimestre</p></div>
+            <div className="flex items-center gap-2"><Pill tone="ok"><Icon name="ArrowUpRight" size={12} />+37,1% em 2 anos</Pill></div>
+          </div>
+          <div className="mt-6"><PillBarChart data={QUARTERS} height={260} /></div>
+        </Card>
+        <DonutCard className="col-span-4" />
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-6 fade-up">
+      <Card className="flex items-center gap-3 p-4">
+        <span className="px-2 text-sm font-semibold">Filtros</span>
+        <Select value={uf} onChange={setUf} options={['Todas UFs', 'SP', 'RJ', 'CE', 'PB', 'DF']} icon="MapPin" />
+        <Select value={ano} onChange={setAno} options={['2025', '2024']} icon="CalendarDays" />
+        <Select value={tri} onChange={setTri} options={['1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre']} icon="Calendar" />
+        <Select value="Todas modalidades" onChange={() => {}} options={['Todas modalidades', 'Medicina de Grupo', 'Cooperativa Médica', 'Seguradora']} icon="Layers" />
+        <span className="ml-auto flex items-center gap-2 text-xs text-muted"><Icon name="Lock" size={13} />Modo consulta · somente leitura</span>
+      </Card>
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-3"><KpiCard variant="dark" label={`Despesas médico-hospitalares · ${tri} de ${ano}`} value="R$ 54,1 bi" delta={10.6} foot="vs trimestre anterior" icon="Stethoscope" /></div>
+        <div className="col-span-3"><KpiCard label="Sinistralidade média" value="83,2%" delta={2.4} foot="eventos / contraprestações" icon="Percent" /></div>
+        <div className="col-span-3"><KpiCard label="Beneficiários cobertos" value="51,4 mi" delta={1.8} foot="planos médico-hospitalares" icon="Users" /></div>
+        <div className="col-span-3"><KpiCard label="Ticket médio por vida" value="R$ 351" delta={-0.9} foot="mensal" icon="HeartPulse" /></div>
+        <div className="col-span-5"><TopOperadoras uf={uf} /></div>
+        <Card className="col-span-7 p-6">
+          <div className="flex items-center justify-between">
+            <div><h3 className="font-display text-[17px] font-bold">Despesas por trimestre</h3><p className="text-sm text-muted">Médico-hospitalar · R$ bilhões</p></div>
+            <Pill tone="sage">Até o {tri} de {ano}</Pill>
+          </div>
+          <div className="mt-6"><PillBarChart data={QUARTERS.slice(0, triIdx)} height={240} /></div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+/* ---- Operadoras ---- */
+const ModalidadePill = ({ m }) => {
+  const tone = { 'Medicina de Grupo': 'sage', 'Cooperativa Médica': 'mint', 'Seguradora Especializada': 'neutral', 'Autogestão': 'warn', 'Odontologia de Grupo': 'neutral' }[m] || 'neutral';
+  return <Pill tone={tone}>{m}</Pill>;
+};
+const StatusPill = ({ s }) => <Pill tone={s === 'Ativa' ? 'ok' : s === 'Inativa' ? 'danger' : 'warn'}><span className="h-1.5 w-1.5 rounded-full bg-current" />{s}</Pill>;
+
+const Drawer = ({ op, onClose, isAdmin, onSave }) => {
+  const [edit, setEdit] = useState(false);
+  const [form, setForm] = useState(op);
+  useEffect(() => { setForm(op); setEdit(false); }, [op]);
+  if (!op) return null;
+  const Field = ({ label, k, mono }) => (
+    <div className="rounded-xl bg-surface px-4 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{label}</div>
+      {edit && isAdmin ? (
+        <input value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none focus:border-mint" />
+      ) : <div className={cx('mt-0.5 text-sm font-semibold', mono && 'font-mono')}>{form[k]}</div>}
+    </div>
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30 backdrop-blur-[2px]" onClick={onClose}>
+      <div className="slide-in flex h-full w-[480px] flex-col bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-forest p-6 text-white">
+          <div className="flex items-start justify-between">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-mint"><Icon name="Building2" size={22} /></span>
+            <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 hover:bg-white/20"><Icon name="X" size={16} /></button>
+          </div>
+          <div className="mt-4 font-display text-xl font-bold">{form.fantasia}</div>
+          <div className="mt-1 text-sm text-white/70">{form.razao}</div>
+          <div className="mt-3 flex gap-2"><Pill tone="lime">Reg. ANS {form.reg}</Pill><Pill className="bg-white/10 text-white">{form.uf}</Pill></div>
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto p-6 scroll-thin">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Registro ANS" k="reg" mono />
+            <Field label="CNPJ" k="cnpj" mono />
+            <Field label="Nome fantasia" k="fantasia" />
+            <Field label="UF" k="uf" />
+          </div>
+          <Field label="Razão social" k="razao" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-sage px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wider text-forest/70">Beneficiários</div><div className="mt-0.5 font-display text-lg font-bold text-forest">{fmtInt(op.benef)}</div></div>
+            <div className="rounded-xl bg-sage px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wider text-forest/70">Despesas · 4º tri 2025</div><div className="mt-0.5 font-display text-lg font-bold text-forest">{fmtBi(op.despesa)}</div></div>
+          </div>
+          <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-3"><span className="text-sm text-muted">Modalidade</span><ModalidadePill m={op.modalidade} /></div>
+          <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-3"><span className="text-sm text-muted">Situação cadastral</span><StatusPill s={op.status} /></div>
+          {!isAdmin && <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 px-4 py-3 text-xs text-muted"><Icon name="Lock" size={14} />Edição disponível apenas para o perfil Administrador.</div>}
+        </div>
+        <div className="flex items-center gap-3 border-t border-slate-100 p-5">
+          {isAdmin ? (
+            edit ? (
+              <>
+                <Button variant="secondary" onClick={() => { setForm(op); setEdit(false); }}>Cancelar</Button>
+                <Button className="flex-1" icon="Check" onClick={() => { onSave(form); setEdit(false); }}>Salvar alterações</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="danger" icon="Power" onClick={() => onSave({ ...op, status: op.status === 'Inativa' ? 'Ativa' : 'Inativa' })}>{op.status === 'Inativa' ? 'Reativar' : 'Inativar'}</Button>
+                <Button className="flex-1" icon="Pencil" onClick={() => setEdit(true)}>Editar operadora</Button>
+              </>
+            )
+          ) : <Button variant="accent" className="flex-1" icon="FileDown">Exportar ficha (PDF)</Button>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Operadoras = ({ isAdmin, toast }) => {
+  const [data, setData] = useState(OPERADORAS);
+  const [q, setQ] = useState('');
+  const [mod, setMod] = useState('Todas modalidades');
+  const [sel, setSel] = useState(null);
+  const mods = ['Todas modalidades', ...Array.from(new Set(OPERADORAS.map((o) => o.modalidade)))];
+  const rows = useMemo(() => {
+    const t = q.toLowerCase().replace(/[^a-z0-9à-ú ]/g, '');
+    return data.filter((o) => {
+      const hay = (o.reg + ' ' + o.razao + ' ' + o.fantasia + ' ' + o.cnpj.replace(/\D/g, '')).toLowerCase();
+      return (!t || hay.includes(t)) && (mod === 'Todas modalidades' || o.modalidade === mod) && (isAdmin || o.status !== 'Inativa');
+    });
+  }, [q, mod, data, isAdmin]);
+  const save = (o) => { setData((d) => d.map((x) => (x.reg === sel.reg ? o : x))); setSel(o); toast('Operadora atualizada'); };
+  return (
+    <div className="space-y-6 fade-up">
+      <div className="grid grid-cols-4 gap-6">
+        {[['Ativas', '1.247', 'CircleCheck'], ['Em análise', '38', 'Clock'], ['Inativadas (12m)', '64', 'CircleOff'], ['Beneficiários', '51,4 mi', 'Users']].map(([l, v, i]) => (
+          <Card key={l} className="flex items-center gap-4 p-5">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-sage text-forest"><Icon name={i} size={19} /></span>
+            <div><div className="text-sm text-muted">{l}</div><div className="font-display text-xl font-bold">{v}</div></div>
+          </Card>
+        ))}
+      </div>
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-slate-100 p-5">
+          <SearchInput value={q} onChange={setQ} placeholder="Buscar por Registro ANS, Razão Social ou CNPJ" className="w-[420px]" />
+          <Select value={mod} onChange={setMod} options={mods} icon="Layers" />
+          <span className="text-sm text-muted">{rows.length} resultado(s)</span>
+          <div className="ml-auto flex gap-2">
+            {isAdmin ? <Button icon="Plus" onClick={() => toast('Formulário de nova operadora aberto')}>Nova operadora</Button>
+              : <Button variant="accent" icon="Download" onClick={() => toast('Exportação CSV iniciada')}>Exportar CSV</Button>}
+          </div>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-surface/60 text-left text-[11px] font-bold uppercase tracking-wider text-muted">
+            <tr><th className="px-5 py-3">Registro ANS</th><th className="px-5 py-3">Operadora</th><th className="px-5 py-3">CNPJ</th><th className="px-5 py-3">Modalidade</th><th className="px-5 py-3">UF</th><th className="px-5 py-3 text-right">Beneficiários</th><th className="px-5 py-3">Status</th><th className="px-5 py-3" /></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((o) => (
+              <tr key={o.reg} onClick={() => setSel(o)} className="cursor-pointer transition hover:bg-surface/60">
+                <td className="px-5 py-3.5 font-mono font-semibold text-forest">{o.reg}</td>
+                <td className="px-5 py-3.5"><div className="font-semibold">{o.fantasia}</div><div className="max-w-[260px] truncate text-xs text-muted">{o.razao}</div></td>
+                <td className="px-5 py-3.5 font-mono text-xs text-slate-600">{o.cnpj}</td>
+                <td className="px-5 py-3.5"><ModalidadePill m={o.modalidade} /></td>
+                <td className="px-5 py-3.5 font-semibold">{o.uf}</td>
+                <td className="px-5 py-3.5 text-right font-semibold">{fmtInt(o.benef)}</td>
+                <td className="px-5 py-3.5"><StatusPill s={o.status} /></td>
+                <td className="px-5 py-3.5 text-right">
+                  <span className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-forest hover:bg-sage">{isAdmin ? <><Icon name="Pencil" size={13} />Gerenciar</> : <><Icon name="Eye" size={13} />Detalhes</>}</span>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={8} className="px-5 py-14 text-center text-muted">Nenhuma operadora encontrada para "{q}".</td></tr>}
+          </tbody>
+        </table>
+      </Card>
+      <Drawer op={sel} onClose={() => setSel(null)} isAdmin={isAdmin} onSave={save} />
+    </div>
+  );
+};
+
+/* ---- Despesas ---- */
+const Despesas = ({ isAdmin, toast }) => {
+  const [ano, setAno] = useState('2025');
+  const [tri, setTri] = useState('4º trimestre');
+  const comp = tri === '4º trimestre' ? 'a' : tri === '3º trimestre' ? 'b' : 'c';
+  const [grupo, setGrupo] = useState('Todos os grupos');
+  const factor = ({ a: 1, b: 0.93, c: 0.89 }[comp]) * (ano === '2024' ? 0.86 : 1);
+  const grupos = ['Todos os grupos', ...Array.from(new Set(CONTAS.map((c) => c.grupo)))];
+  const rows = CONTAS.filter((c) => grupo === 'Todos os grupos' || c.grupo === grupo).map((c) => ({ ...c, atual: c.atual * factor, anterior: c.anterior * factor * (comp === 'a' ? 1 : 0.98) }));
+  const maxV = Math.max(...rows.map((r) => Math.max(r.atual, r.anterior)));
+  const breakdown = CONTAS.filter((c) => c.cod.length === 4);
+  const totalBk = breakdown.reduce((s, c) => s + c.atual, 0);
+  return (
+    <div className="space-y-6 fade-up">
+      <Card className="flex items-center gap-3 p-4">
+        <span className="px-2 text-sm font-semibold">Competência</span>
+        <Select value={ano} onChange={setAno} options={['2025', '2024']} icon="CalendarDays" />
+        <Select value={tri} onChange={setTri} options={['1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre']} icon="Calendar" />
+        <Select value={grupo} onChange={setGrupo} options={grupos} icon="FolderTree" />
+        <div className="ml-auto flex gap-2">
+          {isAdmin && <Button variant="secondary" icon="ShieldCheck" onClick={() => toast('Auditoria do lote do 4º trimestre de 2025 iniciada')}>Auditar lote</Button>}
+          <Button variant="accent" icon="Download" onClick={() => toast('Relatório consolidado exportado')}>Exportar relatório</Button>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-4"><KpiCard variant="dark" label="Eventos conhecidos (conta 41)" value={fmtBi(61.42 * factor)} delta={variation(61.42, 55.87)} foot="vs competência anterior" icon="Receipt" /></div>
+        <div className="col-span-4"><KpiCard label="Despesas administrativas (46)" value={fmtBi(8.71 * factor)} delta={variation(8.71, 8.95)} foot="vs competência anterior" icon="Briefcase" /></div>
+        <div className="col-span-4"><KpiCard label="Comercialização (43)" value={fmtBi(3.14 * factor)} delta={variation(3.14, 2.88)} foot="vs competência anterior" icon="Megaphone" /></div>
+
+        <Card className="col-span-8 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 p-5">
+            <div><h3 className="font-display text-[17px] font-bold">Demonstrações contábeis · plano de contas ANS</h3><p className="text-sm text-muted">Valores consolidados em R$ bilhões · {tri} de {ano} vs trimestre anterior</p></div>
+            <div className="flex items-center gap-4 text-xs text-muted">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-forest" />Atual</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-mint/50" />Anterior</span>
+            </div>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-surface/60 text-left text-[11px] font-bold uppercase tracking-wider text-muted">
+              <tr><th className="px-5 py-3">Conta</th><th className="px-5 py-3">Descrição</th><th className="w-[200px] px-5 py-3">Comparativo</th><th className="px-5 py-3 text-right">Atual</th><th className="px-5 py-3 text-right">Var.</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((c) => {
+                const v = variation(c.atual, c.anterior);
+                return (
+                  <tr key={c.cod} className="hover:bg-surface/60">
+                    <td className="px-5 py-3 font-mono font-semibold text-forest" style={{ paddingLeft: 20 + (c.cod.length - 2) * 10 }}>{c.cod}</td>
+                    <td className="px-5 py-3"><div className={cx(c.cod.length <= 2 ? 'font-bold' : 'font-medium')}>{c.desc}</div><div className="text-[11px] text-muted">{c.grupo}</div></td>
+                    <td className="px-5 py-3">
+                      <div className="space-y-1">
+                        <div className="h-1.5 rounded-full bg-forest" style={{ width: `${(c.atual / maxV) * 100}%` }} />
+                        <div className="h-1.5 rounded-full bg-mint/50" style={{ width: `${(c.anterior / maxV) * 100}%` }} />
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-right font-semibold">{c.atual.toFixed(2).replace('.', ',')}</td>
+                    <td className="px-5 py-3 text-right"><DeltaBadge value={v} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+
+        <div className="col-span-4 space-y-6">
+          <div className="rounded-2xl bg-sage p-5">
+            <h3 className="font-display text-[15px] font-bold text-forest">Composição médico-hospitalar</h3>
+            <p className="text-xs text-forest/70">Participação por tipo de evento</p>
+            <div className="mt-5 space-y-4">
+              {breakdown.map((c) => (
+                <div key={c.cod}>
+                  <div className="flex justify-between text-sm text-forest"><span className="font-medium">{c.desc}</span><span className="font-bold">{((c.atual / totalBk) * 100).toFixed(1)}%</span></div>
+                  <div className="mt-1.5 h-2.5 rounded-full bg-white/60"><div className="h-full rounded-full bg-forest" style={{ width: `${(c.atual / totalBk) * 100}%` }} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <Card className="p-5">
+            <h3 className="font-display text-[15px] font-bold">Destaques da competência</h3>
+            <ul className="mt-3 space-y-3 text-sm">
+              <li className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-700"><Icon name="TrendingUp" size={13} /></span><span><b>Terapias</b> cresceram 26,3%, maior alta entre os eventos.</span></li>
+              <li className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-50 text-red-600"><Icon name="TrendingDown" size={13} /></span><span><b>Despesas administrativas</b> recuaram 2,7%.</span></li>
+              <li className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sage text-forest"><Icon name="Info" size={13} /></span><span><b>Internações</b> seguem como 47% do total médico-hospitalar.</span></li>
+            </ul>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ---- Pipeline & Logs (Admin) ---- */
+const LogList = ({ max = 6 }) => (
+  <div className="space-y-1.5 font-mono text-[12px]">
+    {LOGS.slice(0, max).map((l, i) => (
+      <div key={i} className="flex gap-3 rounded-lg px-3 py-2 hover:bg-surface">
+        <span className="text-muted">{l.t}</span>
+        <span className={cx('w-12 font-bold', l.lvl === 'ERROR' ? 'text-danger' : l.lvl === 'WARN' ? 'text-amber-600' : 'text-emerald-600')}>{l.lvl}</span>
+        <span className="flex-1 truncate text-ink">{l.msg}</span>
+      </div>
+    ))}
+  </div>
+);
+
+const Pipeline = ({ toast }) => {
+  const runs = [
+    { id: '#1842', lote: 'demonstracoes_4T25', s: 'Consolidado', rows: '2.184.906', dur: '6m 41s', when: 'Hoje, 16:41' },
+    { id: '#1841', lote: 'cadop_ativas', s: 'Falha', rows: '—', dur: '30s', when: 'Hoje, 16:20' },
+    { id: '#1840', lote: 'demonstracoes_3T25', s: 'Consolidado', rows: '2.097.331', dur: '6m 12s', when: 'Ontem, 03:00' },
+    { id: '#1839', lote: 'cadop_ativas', s: 'Consolidado', rows: '1.247', dur: '12s', when: 'Ontem, 03:00' },
+    { id: '#1838', lote: 'demonstracoes_2T25', s: 'Em Tratamento', rows: '1.402.118', dur: '—', when: 'Reprocessando' },
+  ];
+  return (
+    <div className="space-y-6 fade-up">
+      <PipelineCard toast={toast} />
+      <div className="grid grid-cols-12 gap-6">
+        <Card className="col-span-7 overflow-hidden">
+          <div className="border-b border-slate-100 p-5"><h3 className="font-display text-[17px] font-bold">Histórico de execuções</h3></div>
+          <table className="w-full text-sm">
+            <thead className="bg-surface/60 text-left text-[11px] font-bold uppercase tracking-wider text-muted"><tr><th className="px-5 py-3">Job</th><th className="px-5 py-3">Lote</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Linhas</th><th className="px-5 py-3">Duração</th><th className="px-5 py-3">Quando</th><th /></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {runs.map((r) => (
+                <tr key={r.id} className="hover:bg-surface/60">
+                  <td className="px-5 py-3 font-mono font-semibold text-forest">{r.id}</td><td className="px-5 py-3 font-mono text-xs">{r.lote}</td>
+                  <td className="px-5 py-3"><StatusBadge status={r.s} /></td><td className="px-5 py-3 text-right font-semibold">{r.rows}</td>
+                  <td className="px-5 py-3 text-muted">{r.dur}</td><td className="px-5 py-3 text-muted">{r.when}</td>
+                  <td className="px-5 py-3 text-right">{r.s === 'Falha' && <Button size="sm" variant="secondary" icon="RotateCcw" onClick={() => toast(`Retry do job ${r.id} agendado`)}>Retry</Button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+        <Card className="col-span-5 p-5">
+          <div className="flex items-center justify-between"><h3 className="font-display text-[17px] font-bold">Logs em tempo real</h3><Pill tone="ok"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-current" />streaming</Pill></div>
+          <div className="mt-4"><LogList /></div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+/* ---- API panel (shared) ---- */
+const ApiPanel = ({ toast, onLogout }) => {
+  const [url, setUrl] = useState('http://localhost:5000/api');
+  const [res, setRes] = useState({ ok: true, ms: 42, at: '16:42:08' });
+  const [checking, setChecking] = useState(false);
+  const hc = () => {
+    setChecking(true);
+    setTimeout(() => {
+      const ms = 24 + Math.round(Math.random() * 60);
+      setRes({ ok: true, ms, at: new Date().toLocaleTimeString('pt-BR') });
+      setChecking(false);
+      toast(`Healthcheck OK · ${ms}ms`);
+    }, 900);
+  };
+  const endpoints = [['GET', '/operadoras', 38], ['GET', '/operadoras/{reg}', 21], ['GET', '/despesas/top', 64], ['POST', '/etl/run', 112]];
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl bg-forest p-6 text-white shadow-lift">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-mint"><Icon name="Server" size={19} /></span><div><div className="font-display text-[17px] font-bold">Endpoint da API Flask</div><div className="text-xs text-white/60">Conexão do worker ETL e consumo do dashboard</div></div></div>
+          <Pill tone="lime"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-forest" />Conectada</Pill>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <input value={url} onChange={(e) => setUrl(e.target.value)} className="h-11 flex-1 rounded-full border border-white/15 bg-white/10 px-5 font-mono text-sm text-mint outline-none focus:border-mint" />
+          <button onClick={hc} className="flex h-11 items-center gap-2 rounded-full bg-mint px-5 text-sm font-bold text-forest hover:bg-[#3cc286]">
+            <span className={checking ? 'animate-spin inline-flex' : 'inline-flex'}><Icon name={checking ? 'LoaderCircle' : 'Activity'} size={16} /></span>{checking ? 'Testando' : 'Healthcheck'}
+          </button>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {[['Status', res.ok ? '200 OK' : 'Erro'], ['Latência', `${res.ms} ms`], ['Último teste', res.at]].map(([l, v]) => (
+            <div key={l} className="rounded-xl bg-white/[.07] px-4 py-3"><div className="text-[11px] uppercase tracking-wider text-white/50">{l}</div><div className="mt-0.5 font-display text-lg font-bold">{v}</div></div>
+          ))}
+        </div>
+      </div>
+      <Card className="p-5">
+        <h3 className="font-display text-[15px] font-bold">Rotas expostas</h3>
+        <div className="mt-3 divide-y divide-slate-100">
+          {endpoints.map(([m, p, ms]) => (
+            <div key={p} className="flex items-center gap-3 py-2.5 text-sm">
+              <span className={cx('w-12 rounded-md py-0.5 text-center font-mono text-[11px] font-bold', m === 'GET' ? 'bg-sage text-forest' : 'bg-amber-50 text-amber-700')}>{m}</span>
+              <code className="flex-1 text-ink">{p}</code><span className="text-xs text-muted">p95 {ms}ms</span><span className="h-2 w-2 rounded-full bg-ok" />
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card className="p-5">
+        <h3 className="font-display text-[15px] font-bold">Logs rápidos</h3>
+        <div className="mt-3"><LogList max={4} /></div>
+      </Card>
+    </div>
+  );
+};
+
+/* ---- Perfil ---- */
+const Toggle = ({ on, onChange, label, desc }) => (
+  <button type="button" onClick={() => onChange(!on)} className="flex w-full items-center justify-between gap-4 py-3 text-left">
+    <span><span className="block text-sm font-semibold">{label}</span><span className="block text-xs text-muted">{desc}</span></span>
+    <span className={cx('relative h-6 w-11 shrink-0 rounded-full transition', on ? 'bg-forest' : 'bg-slate-200')}>
+      <span className={cx('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', on ? 'left-[22px]' : 'left-0.5')} />
+    </span>
+  </button>
+);
+const Field = ({ label, children }) => (
+  <label className="block [&_select]:w-full"><span className="mb-1.5 block text-sm font-semibold">{label}</span>{children}</label>
+);
+const inputCls = 'h-11 w-full rounded-full border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-mint focus:ring-4 focus:ring-mint/20';
+
+const Perfil = ({ user, setUser, isAdmin, toast, onLogout }) => {
+  const [form, setForm] = useState({ name: user.name, email: user.email, role: user.role, phone: '(83) 99812-4471', birth: '1994-03-12' });
+  const [photo, setPhoto] = useState(user.photo || null);
+  const [prefs, setPrefs] = useState({ lang: 'Português (Brasil)', theme: 'Claro', dateFmt: 'DD/MM/AAAA', uf: 'Todas UFs', tri: '4º trimestre', weekly: true, alerts: true, exportFmt: 'CSV' });
+  const [confirmOut, setConfirmOut] = useState(false);
+  const fileRef = useRef();
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const setP = (k) => (v) => setPrefs({ ...prefs, [k]: v });
+  const onPhoto = (e) => { const f = e.target.files && e.target.files[0]; if (f) setPhoto(URL.createObjectURL(f)); };
+  const save = () => {
+    setUser({ ...user, name: form.name, email: form.email, role: form.role, photo, initials: form.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase() });
+    toast('Perfil atualizado');
+  };
+  return (
+    <div className="grid grid-cols-12 gap-6 fade-up">
+      <div className="col-span-4 space-y-6">
+        <Card className="overflow-hidden">
+          <div className="relative h-24 bg-forest"><div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-mint/15" /></div>
+          <div className="px-6 pb-6">
+            <div className="-mt-12 flex items-end gap-3">
+              <div className="relative">
+                {photo ? <img src={photo} alt="Foto de perfil" className="h-24 w-24 rounded-3xl object-cover ring-4 ring-white" />
+                  : <span className="grid h-24 w-24 place-items-center rounded-3xl bg-mint font-display text-3xl font-extrabold text-forest ring-4 ring-white">{user.initials}</span>}
+                <button onClick={() => fileRef.current.click()} aria-label="Alterar foto" className="absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full bg-forest text-white ring-4 ring-white hover:bg-[#0b2d24]"><Icon name="Camera" size={15} /></button>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+              </div>
+            </div>
+            <div className="mt-4 font-display text-2xl font-bold">{user.name}</div>
+            <div className="text-sm text-muted">{user.role}</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Pill tone="sage">ID #{user.id}</Pill>
+              <Pill tone={isAdmin ? 'forest' : 'sage'}>{user.perfil}</Pill>
+              <Pill tone="ok"><span className="pulse-dot h-1.5 w-1.5 rounded-full bg-current" />Sessão ativa</Pill>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <Button size="sm" variant="secondary" icon="Upload" onClick={() => fileRef.current.click()}>Enviar foto</Button>
+              {photo && <Button size="sm" variant="ghost" onClick={() => setPhoto(null)}>Remover</Button>}
+            </div>
+            <p className="mt-2 text-[11px] text-muted">JPG ou PNG, até 2 MB.</p>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <h3 className="font-display text-[15px] font-bold">Conta</h3>
+          <div className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-muted">Membro desde</span><b>08/2024</b></div>
+            <div className="flex justify-between"><span className="text-muted">Último acesso</span><b>17/11/2026 · 08:14</b></div>
+          </div>
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            {confirmOut ? (
+              <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => setConfirmOut(false)}>Cancelar</Button><Button size="sm" variant="dangerSolid" icon="LogOut" onClick={onLogout}>Confirmar saída</Button></div>
+            ) : <Button size="sm" variant="danger" icon="LogOut" onClick={() => setConfirmOut(true)}>Encerrar sessão</Button>}
+          </div>
+        </Card>
+      </div>
+
+      <div className="col-span-8 space-y-6">
+        <Card className="p-6">
+          <h3 className="font-display text-[17px] font-bold">Dados pessoais</h3>
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <Field label="Nome completo"><input className={inputCls} value={form.name} onChange={set('name')} /></Field>
+            <Field label="E-mail"><input type="email" className={inputCls} value={form.email} onChange={set('email')} /></Field>
+            <Field label="Cargo"><input className={inputCls} value={form.role} onChange={set('role')} /></Field>
+            <Field label="Telefone"><input className={inputCls} value={form.phone} onChange={set('phone')} /></Field>
+            <Field label="Data de nascimento"><input type="date" className={inputCls} value={form.birth} onChange={set('birth')} /></Field>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <h3 className="font-display text-[17px] font-bold">Preferências</h3>
+          <div className="mt-5 grid grid-cols-3 gap-4">
+            <Field label="Idioma"><Select value={prefs.lang} onChange={setP('lang')} options={['Português (Brasil)', 'English', 'Español']} icon="Languages" /></Field>
+            <Field label="Formato de data"><Select value={prefs.dateFmt} onChange={setP('dateFmt')} options={['DD/MM/AAAA', 'AAAA-MM-DD']} icon="CalendarDays" /></Field>
+            <Field label="Exportar como"><Select value={prefs.exportFmt} onChange={setP('exportFmt')} options={['CSV', 'PDF', 'XLSX']} icon="FileDown" /></Field>
+            <Field label="UF padrão"><Select value={prefs.uf} onChange={setP('uf')} options={['Todas UFs', 'PB', 'SP', 'RJ', 'CE']} icon="MapPin" /></Field>
+            <Field label="Trimestre padrão"><Select value={prefs.tri} onChange={setP('tri')} options={['1º trimestre', '2º trimestre', '3º trimestre', '4º trimestre']} icon="Calendar" /></Field>
+            <div>
+              <span className="mb-1.5 block text-sm font-semibold">Tema</span>
+              <div className="flex rounded-full bg-surface p-1">
+                {['Claro', 'Escuro', 'Sistema'].map((t) => (
+                  <button key={t} onClick={() => setP('theme')(t)} className={cx('h-9 flex-1 rounded-full text-xs font-semibold', prefs.theme === t ? 'bg-forest text-white' : 'text-muted')}>{t}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 divide-y divide-slate-100 border-t border-slate-100">
+            <Toggle on={prefs.weekly} onChange={setP('weekly')} label="Resumo semanal por e-mail" desc="Principais variações de despesas toda segunda-feira" />
+            <Toggle on={prefs.alerts} onChange={setP('alerts')} label="Avisar quando houver novos dados da ANS" desc="Notificação quando um novo trimestre for publicado" />
+          </div>
+        </Card>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => toast('Alterações descartadas')}>Cancelar</Button>
+          <Button icon="Check" onClick={save}>Salvar alterações</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LoggedOut = ({ onBack }) => (
+  <div className="grid min-h-[70vh] place-items-center fade-up">
+    <Card className="w-[440px] p-10 text-center">
+      <div className="mx-auto w-fit"><Logo size={56} /></div>
+      <h2 className="mt-5 font-display text-2xl font-bold">Sessão encerrada</h2>
+      <p className="mt-2 text-sm text-muted">Você saiu da plataforma com segurança.</p>
+      <Button className="mt-6 w-full" size="lg" onClick={onBack} icon="LogIn">Entrar novamente</Button>
+    </Card>
+  </div>
+);
+
+const PAGES = {
+  dashboard: ['Painel Geral', 'Dashboard ANS & ETL · 4º trimestre de 2025'],
+  operadoras: ['Operadoras ANS', 'Catálogo de operadoras com registro na ANS'],
+  despesas: ['Despesas Contábeis', 'Demonstrações contábeis e despesas assistenciais'],
+  pipeline: ['Pipeline ETL & Logs', 'Monitoramento de jobs Extract · Transform · Load'],
+  api: ['API & Endpoints', 'Conexão do worker com a API Flask'],
+  perfil: ['Configurações de Perfil', 'Dados pessoais, foto e preferências'],
+};
+
+const Prototype = ({ onBack, initialRole = 'admin', onLogout }) => {
+  const [role, setRole] = useState(initialRole);
+  const [users, setUsers] = useState(USERS);
+  const [page, setPage] = useState('dashboard');
+  const [loggedOut, setLoggedOut] = useState(false);
+  const [toast, showToast] = useToast();
+  const isAdmin = role === 'admin';
+  const user = users[role];
+  const switchRole = (r) => {
+    setRole(r); setLoggedOut(false);
+    if (r === 'consumer' && (page === 'pipeline' || page === 'api')) setPage('dashboard');
+  };
+  const [title, sub] = PAGES[page];
+  return (
+    <div className="min-h-screen min-w-[1280px] bg-surface">
+      {/* Floating control bar */}
+      <div className="fixed left-1/2 top-3 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/95 p-1.5 pl-2 text-white shadow-lift backdrop-blur">
+        <button onClick={onBack} className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 hover:text-white"><Icon name="ArrowLeft" size={14} />Voltar ao Design System</button>
+        <span className="h-5 w-px bg-white/20" />
+        <span className="px-2 text-[11px] font-semibold uppercase tracking-wider text-white/50">Protótipo</span>
+        {[['admin', 'ShieldCheck', 'Administrador · Luiza Leblanc'], ['consumer', 'Eye', 'Consumidor · Analista Externo']].map(([r, i, l]) => (
+          <button key={r} onClick={() => switchRole(r)} className={cx('flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition', role === r ? 'bg-mint text-forest' : 'text-white/75 hover:bg-white/10')}>
+            <Icon name={i} size={14} />{l}
+          </button>
+        ))}
+      </div>
+
+      <Sidebar page={page} setPage={(p) => { setPage(p); setLoggedOut(false); }} isAdmin={isAdmin} />
+      <main className="ml-[260px] px-10 pb-12 pt-[76px]">
+        {loggedOut ? <LoggedOut onBack={() => { setLoggedOut(false); setPage('dashboard'); }} /> : (
+          <>
+            <Topbar user={user} title={title} subtitle={sub} setPage={setPage} onExport={!isAdmin && page !== 'perfil' ? () => showToast('Relatório consolidado exportado (CSV)') : null} />
+            <div className="mt-7" key={role + page}>
+              {page === 'dashboard' && <Dashboard isAdmin={isAdmin} toast={showToast} />}
+              {page === 'operadoras' && <Operadoras isAdmin={isAdmin} toast={showToast} />}
+              {page === 'despesas' && <Despesas isAdmin={isAdmin} toast={showToast} />}
+              {page === 'pipeline' && isAdmin && <Pipeline toast={showToast} />}
+              {page === 'api' && isAdmin && <div className="grid grid-cols-12 gap-6 fade-up"><div className="col-span-8"><ApiPanel toast={showToast} /></div><div className="col-span-4 space-y-6"><EndpointWidget /><DonutCard title="Consumo por rota" /></div></div>}
+              {page === 'perfil' && <Perfil user={user} setUser={(u) => setUsers({ ...users, [role]: u })} isAdmin={isAdmin} toast={showToast} onLogout={() => (onLogout ? onLogout() : setLoggedOut(true))} />}
+            </div>
+          </>
+        )}
+      </main>
+      <Toast msg={toast} />
+    </div>
+  );
+};
+
+/* ============ Página inicial e Login ============ */
+const PublicHeader = ({ onLogin, onHome, onBack }) => (
+  <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur">
+    <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-4 px-5 sm:px-8">
+      <button onClick={onHome} className="min-w-0"><LogoHorizontal size={36} /></button>
+      <div className="flex items-center gap-2">
+        <button onClick={onBack} className="hidden rounded-full px-4 py-2 text-sm font-medium text-muted hover:bg-surface hover:text-ink md:inline-flex">Design System</button>
+        {onLogin && <Button size="md" icon="LogIn" onClick={onLogin}>Entrar</Button>}
+      </div>
+    </div>
+  </header>
+);
+
+const Home = ({ onLogin, onBack }) => (
+  <div className="flex min-h-screen flex-col bg-white">
+    <header className="mx-auto flex w-full max-w-[1200px] items-center justify-end px-5 py-5 sm:px-8">
+      <Button size="md" icon="LayoutGrid" onClick={onBack}>Design System</Button>
+    </header>
+
+    <main className="flex flex-1 flex-col items-center justify-center px-5 pb-16 text-center sm:px-8">
+      <div className="relative">
+        <div className="absolute inset-0 -z-10 scale-150 rounded-full bg-mint/15 blur-3xl" />
+        <Mark size={132} bg="#113E32" sw={2} />
+      </div>
+      <div className="mt-7 font-display text-[32px] font-extrabold tracking-tight text-forest sm:text-[40px]">intuitivecare</div>
+      <div className="mt-1 text-[11px] font-semibold uppercase tracking-[.2em] text-muted">Controle e Tratamento de dados</div>
+
+      <h1 className="mt-12 max-w-3xl text-balance font-display text-[32px] font-extrabold leading-[1.12] tracking-tight text-ink sm:text-[48px]">
+        Pare de tratar planilhas.<br /><span className="text-forest">Comece a tomar decisões.</span>
+      </h1>
+      <p className="mt-5 max-w-xl text-balance text-[17px] leading-relaxed text-muted">
+        Os dados da saúde suplementar chegam brutos, fragmentados e difíceis de confiar. A Intuitive Care entrega tudo limpo, validado e pronto para você enxergar o que importa.
+      </p>
+      <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+        <Button size="lg" iconRight="ArrowRight" onClick={onLogin}>Começar agora</Button>
+      </div>
+      <p className="mt-4 text-xs text-muted">Acesso para administradores e analistas.</p>
+
+      <div className="mt-20 grid w-full max-w-4xl gap-10 text-left sm:grid-cols-3">
+        {[
+          ['Confiança', 'Cada registro é validado antes de chegar até você. Sem retrabalho, sem dúvida.'],
+          ['Clareza', 'Operadoras e despesas organizadas para você entender em segundos, não em horas.'],
+          ['Tempo', 'O trabalho repetitivo fica com a gente. A análise que gera valor fica com você.'],
+        ].map(([t, d]) => (
+          <div key={t}>
+            <div className="h-1 w-8 rounded-full bg-mint" />
+            <h3 className="mt-4 font-display text-lg font-bold text-forest">{t}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{d}</p>
+          </div>
+        ))}
+      </div>
+    </main>
+
+    <footer className="py-6 text-center text-xs text-muted">Intuitive Care · Controle e Tratamento de dados</footer>
+  </div>
+);
+
+const ACCOUNTS = {
+  'admin@intuitivecare.com.br': { pass: 'Admin@2025', role: 'admin' },
+  'consumidor@intuitivecare.com.br': { pass: 'Consulta@2025', role: 'consumer' },
+};
+
+const Login = ({ onSuccess, onHome, onBack }) => {
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+  const submit = (e) => {
+    e.preventDefault();
+    setErr('');
+    if (!email || !pass) { setErr('Informe e-mail e senha.'); return; }
+    setLoading(true);
+    setTimeout(() => {
+      const acc = ACCOUNTS[email.trim().toLowerCase()];
+      setLoading(false);
+      if (!acc || acc.pass !== pass) { setErr('E-mail ou senha incorretos.'); return; }
+      onSuccess(acc.role);
+    }, 700);
+  };
+  const fill = (k) => { setEmail(k); setPass(ACCOUNTS[k].pass); setErr(''); };
+  return (
+    <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] bg-white lg:grid-cols-2">
+      <div className="relative hidden overflow-hidden bg-forest p-12 text-white lg:flex lg:flex-col">
+        <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-mint/10" />
+        <button onClick={onHome} className="relative self-start"><LogoHorizontal negative size={40} /></button>
+        <div className="relative my-auto">
+          <Mark size={120} sw={1.8} />
+          <h2 className="mt-8 max-w-md font-display text-[34px] font-extrabold leading-tight">Do arquivo da ANS ao painel, <span className="text-mint">sem planilha no meio.</span></h2>
+          <p className="mt-4 max-w-md text-white/70">Extração, tratamento e análise de operadoras e despesas assistenciais em um só lugar.</p>
+        </div>
+        <span className="relative text-xs text-white/50">Intuitive Care · Controle e Tratamento de dados</span>
+      </div>
+      <div className="flex min-w-0 flex-col px-5 py-6 sm:px-10">
+        <div className="flex items-center justify-between">
+          <button onClick={onHome} className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink"><Icon name="ArrowLeft" size={15} />Página inicial</button>
+          <button onClick={onBack} className="text-sm font-medium text-muted hover:text-ink">Design System</button>
+        </div>
+        <div className="mx-auto my-auto w-full max-w-[400px] py-10">
+          <div className="lg:hidden"><LogoHorizontal size={40} /></div>
+          <h1 className="mt-8 font-display text-[28px] font-extrabold tracking-tight lg:mt-0">Entrar</h1>
+          <p className="mt-1 text-sm text-muted">Use seu e-mail corporativo e senha.</p>
+          <form onSubmit={submit} className="mt-8 space-y-4" noValidate>
+            <div>
+              <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">E-mail</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"><Icon name="Mail" size={16} /></span>
+                <input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@intuitivecare.com.br"
+                  className={cx('h-12 w-full rounded-full border bg-white pl-11 pr-4 text-sm outline-none transition focus:ring-4', err ? 'border-red-300 focus:border-danger focus:ring-red-100' : 'border-slate-200 focus:border-mint focus:ring-mint/20')} />
+              </div>
+            </div>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="senha" className="text-sm font-semibold">Senha</label>
+                <button type="button" className="text-xs font-semibold text-forest hover:underline">Esqueci a senha</button>
+              </div>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"><Icon name="Lock" size={16} /></span>
+                <input id="senha" type={show ? 'text' : 'password'} autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Sua senha"
+                  className={cx('h-12 w-full rounded-full border bg-white pl-11 pr-12 text-sm outline-none transition focus:ring-4', err ? 'border-red-300 focus:border-danger focus:ring-red-100' : 'border-slate-200 focus:border-mint focus:ring-mint/20')} />
+                <button type="button" onClick={() => setShow(!show)} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'} className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-surface"><Icon name={show ? 'EyeOff' : 'Eye'} size={16} /></button>
+              </div>
+            </div>
+            {err && <div role="alert" className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700"><Icon name="CircleAlert" size={15} />{err}</div>}
+            <Button type="submit" size="lg" className="w-full" disabled={loading}>
+              {loading ? <><span className="inline-flex animate-spin"><Icon name="LoaderCircle" size={16} /></span>Entrando...</> : 'Entrar'}
+            </Button>
+          </form>
+          <div className="mt-8 rounded-2xl bg-[#F6F8F7] p-4">
+            <div className="text-xs font-bold uppercase tracking-[.08em] text-muted">Acessos de demonstração</div>
+            <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2">
+              {[['admin@intuitivecare.com.br', 'Administrador', 'ShieldCheck'], ['consumidor@intuitivecare.com.br', 'Consumidor', 'Eye']].map(([k, l, i]) => (
+                <button key={k} onClick={() => fill(k)} className="flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-left hover:ring-2 hover:ring-mint/40">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-forest text-mint"><Icon name={i} size={14} /></span>
+                  <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{l}</span><span className="block truncate font-mono text-[11px] text-muted">{k} · {ACCOUNTS[k].pass}</span></span>
+                  <span className="text-xs font-semibold text-forest">Preencher</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ============ App ============ */
+const ROUTES = { home: '#inicio', login: '#login', proto: '#prototipo' };
+const App = () => {
+  const fromHash = () => (Object.keys(ROUTES).find((k) => ROUTES[k] === location.hash) || 'ds');
+  const [mode, setMode] = useState(() => { const m = fromHash(); return m === 'proto' ? 'login' : m; });
+  const [role, setRole] = useState('admin');
+  const go = (m) => {
+    setMode(m);
+    try { history.replaceState(null, '', ROUTES[m] || location.pathname + location.search); } catch (e) {}
+    window.scrollTo({ top: 0 });
+  };
+  if (mode === 'home') return <Home onLogin={() => go('login')} onBack={() => go('ds')} />;
+  if (mode === 'login') return <Login onSuccess={(r) => { setRole(r); go('proto'); }} onHome={() => go('home')} onBack={() => go('ds')} />;
+  if (mode === 'proto') return <Prototype key={role} initialRole={role} onBack={() => go('ds')} onLogout={() => go('login')} />;
+  return <DesignSystem onEnter={() => go('home')} />;
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 import '../models/operadora_model.dart';
 import 'api_client.dart';
 
-/// Serviço de comunicação HTTP para o CRUD de operadoras na API Flask.
+/// Comunicação HTTP com /api/operadoras.
 class OperadoraService {
   final ApiClient _client;
 
@@ -9,44 +9,33 @@ class OperadoraService {
 
   Future<Map<String, dynamic>> fetchOperadoras({
     int page = 1,
-    int limit = 10,
+    int limit = 15,
     String search = '',
     String uf = '',
+    String modalidade = '',
   }) async {
     final res = await _client.get('/operadoras', query: {
       'page': page.toString(),
       'limit': limit.toString(),
       'search': search,
       'uf': uf,
+      'modalidade': modalidade,
     });
     return Map<String, dynamic>.from(res as Map);
   }
 
-  Future<Map<String, dynamic>> fetchOperadoraByIdentifier(String identifier) async {
-    final res = await _client.get('/operadoras/$identifier');
-    return Map<String, dynamic>.from(res as Map);
-  }
+  Future<Map<String, dynamic>> fetchResumo() async =>
+      Map<String, dynamic>.from(await _client.get('/operadoras/resumo') as Map);
 
-  Future<List<dynamic>> fetchDespesasByOperadora(String identifier) async {
-    final res = await _client.get('/operadoras/$identifier/despesas');
-    return List<dynamic>.from(res as List);
-  }
+  Future<String> exportarCsv({String search = '', String modalidade = ''}) =>
+      _client.getText('/operadoras/exportar.csv', query: {'search': search, 'modalidade': modalidade});
 
-  Future<Map<String, dynamic>> createOperadora(OperadoraModel operadora) async {
-    final res = await _client.post('/operadoras', body: operadora.toJson());
-    return Map<String, dynamic>.from(res as Map);
-  }
+  Future<Map<String, dynamic>> createOperadora(OperadoraModel operadora) async =>
+      Map<String, dynamic>.from(await _client.post('/operadoras', body: operadora.toJson()) as Map);
 
-  Future<Map<String, dynamic>> updateOperadora(String registroAns, OperadoraModel operadora) async {
-    final res = await _client.put('/operadoras/$registroAns', body: operadora.toJson());
-    return Map<String, dynamic>.from(res as Map);
-  }
+  Future<Map<String, dynamic>> updateOperadora(String registroAns, Map<String, dynamic> campos) async =>
+      Map<String, dynamic>.from(await _client.put('/operadoras/$registroAns', body: campos) as Map);
 
-  Future<Map<String, dynamic>> deleteOperadora(String registroAns, {bool force = false}) async {
-    final res = await _client.delete(
-      '/operadoras/$registroAns',
-      query: force ? {'force': 'true'} : null,
-    );
-    return Map<String, dynamic>.from(res as Map);
-  }
+  Future<Map<String, dynamic>> updateStatus(String registroAns, String status) async =>
+      Map<String, dynamic>.from(await _client.patch('/operadoras/$registroAns/status', body: {'status': status}) as Map);
 }

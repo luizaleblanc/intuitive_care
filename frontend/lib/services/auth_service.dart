@@ -35,8 +35,8 @@ class AuthService {
     return Map<String, dynamic>.from(res as Map);
   }
 
-  Future<Map<String, dynamic>> updateProfile({required String nome}) async {
-    final res = await _client.put('/auth/me', body: {'nome': nome});
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> campos) async {
+    final res = await _client.put('/auth/me', body: campos);
     return Map<String, dynamic>.from(res as Map);
   }
 

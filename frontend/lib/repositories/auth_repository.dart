@@ -101,8 +101,8 @@ class AuthRepository {
     return UserModel.fromJson(res['usuario'] as Map<String, dynamic>);
   }
 
-  Future<UserModel> updateProfile({required String nome}) async {
-    final res = await _authService.updateProfile(nome: nome);
+  Future<UserModel> updateProfile(Map<String, dynamic> campos) async {
+    final res = await _authService.updateProfile(campos);
     return UserModel.fromJson(res['usuario'] as Map<String, dynamic>);
   }
 

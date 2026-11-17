@@ -86,13 +86,35 @@ class ApiClient {
     );
   }
 
+  Future<dynamic> patch(String path, {Map<String, dynamic>? body}) async {
+    return _send(
+      () => _httpClient.patch(
+        _buildUri(path),
+        headers: _headers(),
+        body: jsonEncode(body ?? <String, dynamic>{}),
+      ),
+    );
+  }
+
+  /// GET que devolve o corpo como texto (ex.: exportação CSV gerada pela API).
+  Future<String> getText(String path, {Map<String, String>? query}) async {
+    final response = await _httpClient
+        .get(_buildUri(path, query), headers: _headers())
+        .timeout(const Duration(seconds: 60));
+    if (response.statusCode == 401) onUnauthorized?.call();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(statusCode: response.statusCode, message: 'Erro HTTP ${response.statusCode}');
+    }
+    return utf8.decode(response.bodyBytes);
+  }
+
   Future<dynamic> delete(String path, {Map<String, String>? query}) async {
     return _send(() => _httpClient.delete(_buildUri(path, query), headers: _headers()));
   }
 
   Future<dynamic> _send(Future<http.Response> Function() requestFn) async {
     try {
-      final response = await requestFn().timeout(const Duration(seconds: 15));
+      final response = await requestFn().timeout(const Duration(seconds: 30));
       dynamic decoded;
       if (response.body.isNotEmpty) {
         try {

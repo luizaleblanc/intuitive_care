@@ -3,113 +3,172 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:intuitive_care_app/models/operadora_model.dart';
+import 'package:intuitive_care_app/repositories/analitico_repository.dart';
 import 'package:intuitive_care_app/repositories/auth_repository.dart';
 import 'package:intuitive_care_app/repositories/operadora_repository.dart';
+import 'package:intuitive_care_app/services/analitico_service.dart';
 import 'package:intuitive_care_app/services/api_client.dart';
 import 'package:intuitive_care_app/services/auth_service.dart';
 import 'package:intuitive_care_app/services/operadora_service.dart';
 import 'package:intuitive_care_app/services/session_storage_service.dart';
 import 'package:intuitive_care_app/viewmodels/auth_viewmodel.dart';
-import 'package:intuitive_care_app/viewmodels/operadora_viewmodel.dart';
+import 'package:intuitive_care_app/viewmodels/contas_viewmodel.dart';
+import 'package:intuitive_care_app/viewmodels/operadoras_viewmodel.dart';
+import 'package:intuitive_care_app/viewmodels/painel_viewmodel.dart';
 
-class _InMemorySessionStorage extends SessionStorageService {
+class _MemoriaSessao extends SessionStorageService {
   String? _token;
-
   @override
   Future<void> saveToken(String token) async => _token = token;
-
   @override
   Future<String?> readToken() async => _token;
-
   @override
   Future<void> clearToken() async => _token = null;
 }
 
+http.Response _json(Object body, [int status = 200]) =>
+    http.Response.bytes(utf8.encode(jsonEncode(body)), status, headers: {'content-type': 'application/json'});
+
+Map<String, dynamic> _painel(int ano, int tri) => {
+      'periodo': {'ano': ano, 'trimestre': tri},
+      'periodos': [
+        {'ano': 2026, 'trimestre': 2},
+        {'ano': 2026, 'trimestre': 1},
+        {'ano': 2025, 'trimestre': 4},
+      ],
+      'admin': {
+        'total_despesas': 1.0,
+        'registros_extraidos': 10,
+        'operadoras_ativas': 1,
+        'operadoras_com_demonstracao': 1,
+        'serie': [],
+        'modalidades': [],
+      },
+      'consumidor': {'despesas_mh': 1.0, 'beneficiarios': 1, 'ranking': [], 'serie': []},
+    };
+
 void main() {
-  group('ViewModels + Repositories + ApiClient Integration', () {
-    test('AuthViewModel realiza login, envia Bearer token e executa logout', () async {
-      String? capturedAuthHeader;
-
-      final mockHttp = MockClient((request) async {
-        capturedAuthHeader = request.headers['Authorization'];
-        if (request.url.path.endsWith('/auth/login')) {
-          return http.Response(
-            jsonEncode({
-              'mensagem': 'Autenticação realizada com sucesso.',
-              'token': 'jwt-token-demo',
-              'usuario': {
-                'id': 1,
-                'nome': 'Analista Teste',
-                'email': 'analista@intuitivecare.com.br',
-                'perfil': 'ANALISTA',
-                'ativo': true,
-              },
-            }),
-            200,
-            headers: {'content-type': 'application/json; charset=utf-8'},
-          );
+  test('AuthViewModel faz login com Bearer, atualiza perfil e encerra sessão', () async {
+    final headers = <String, String?>{};
+    Map<String, dynamic>? corpoPerfil;
+    final client = ApiClient(
+      httpClient: MockClient((req) async {
+        headers[req.url.path] = req.headers['Authorization'];
+        if (req.url.path.endsWith('/auth/login')) {
+          return _json({
+            'token': 'jwt-demo',
+            'usuario': {'id': 1, 'nome': 'Luiza Leblanc', 'email': 'admin@intuitivecare.com.br', 'perfil': 'ADMIN'},
+          });
         }
-        if (request.url.path.endsWith('/auth/logout')) {
-          return http.Response(jsonEncode({'mensagem': 'Logoff realizado.'}), 200);
+        if (req.url.path.endsWith('/auth/me') && req.method == 'PUT') {
+          corpoPerfil = jsonDecode(req.body) as Map<String, dynamic>;
+          return _json({
+            'usuario': {
+              'id': 1,
+              'nome': corpoPerfil!['nome'],
+              'email': 'admin@intuitivecare.com.br',
+              'perfil': 'ADMIN',
+              'telefone': corpoPerfil!['telefone'],
+            },
+          });
         }
-        return http.Response(jsonEncode({'erro': 'Não encontrado'}), 404);
-      });
+        return _json({'mensagem': 'ok'});
+      }),
+    );
+    final vm = AuthViewModel(
+      AuthRepository(apiClient: client, authService: AuthService(client), storageService: _MemoriaSessao()),
+    );
 
-      final apiClient = ApiClient(httpClient: mockHttp);
-      final authVm = AuthViewModel(
-        AuthRepository(
-          apiClient: apiClient,
-          authService: AuthService(apiClient),
-          storageService: _InMemorySessionStorage(),
-        ),
-      );
+    expect(await vm.login(email: 'admin@intuitivecare.com.br', senha: 'Admin@2025'), isTrue);
+    expect(vm.currentUser!.isAdmin, isTrue);
 
-      final loggedIn = await authVm.login(
-        email: 'analista@intuitivecare.com.br',
-        senha: 'Senha@123',
-      );
+    expect(await vm.updateProfile({'nome': 'Luiza L.', 'telefone': '(83) 99999-0000'}), isTrue);
+    expect(vm.currentUser!.nome, 'Luiza L.');
+    expect(vm.currentUser!.telefone, '(83) 99999-0000');
+    expect(headers['/api/auth/me'], 'Bearer jwt-demo');
 
-      expect(loggedIn, true);
-      expect(authVm.isAuthenticated, true);
-      expect(authVm.currentUser?.nome, 'Analista Teste');
-      expect(apiClient.authToken, 'jwt-token-demo');
+    await vm.logout();
+    expect(vm.status, AuthStatus.unauthenticated);
+  });
 
-      await authVm.logout();
-      expect(capturedAuthHeader, 'Bearer jwt-token-demo');
-      expect(authVm.isAuthenticated, false);
-      expect(authVm.currentUser, isNull);
-    });
+  test('PainelViewModel envia Ano + Trimestre e ajusta o trimestre ao trocar de ano', () async {
+    final consultas = <Map<String, String>>[];
+    final client = ApiClient(
+      httpClient: MockClient((req) async {
+        consultas.add(req.url.queryParameters);
+        final ano = int.tryParse(req.url.queryParameters['ano'] ?? '') ?? 2026;
+        final tri = int.tryParse(req.url.queryParameters['trimestre'] ?? '') ?? 2;
+        return _json(_painel(ano, tri));
+      }),
+    );
+    final vm = PainelViewModel(AnaliticoRepository(AnaliticoService(client)));
 
-    test('OperadoraViewModel trata erros HTTP 400 da API Flask', () async {
-      final mockHttp = MockClient((request) async {
-        if (request.method == 'POST' && request.url.path.endsWith('/operadoras')) {
-          return http.Response.bytes(
-            utf8.encode(jsonEncode({'erro': 'CNPJ inválido: dígitos verificadores não conferem.'})),
-            400,
-            headers: {'content-type': 'application/json; charset=utf-8'},
-          );
+    await vm.carregar();
+    expect(vm.anosDisponiveis, [2026, 2025]);
+    expect(vm.trimestresDoAno(2026), [1, 2]);
+
+    await vm.carregar(ano: 2025);
+    expect(consultas.last['ano'], '2025');
+    expect(consultas.last['trimestre'], '4');
+
+    await vm.carregar(uf: 'SP');
+    expect(consultas.last['uf'], 'SP');
+  });
+
+  test('OperadorasViewModel carrega lista + resumo e envia busca', () async {
+    String? busca;
+    final client = ApiClient(
+      httpClient: MockClient((req) async {
+        if (req.url.path.endsWith('/resumo')) {
+          return _json({'ativas': 1101, 'em_analise': 0, 'inativadas_12m': 43, 'beneficiarios': 90491206,
+            'modalidades': ['Medicina de Grupo'], 'ufs': ['SP']});
         }
-        return http.Response(
-          jsonEncode({'data': [], 'total': 0, 'page': 1, 'limit': 8, 'total_pages': 1}),
-          200,
-        );
-      });
+        busca = req.url.queryParameters['search'];
+        return _json({
+          'data': [
+            {'registro_ans': '326305', 'cnpj': '29309127000179', 'razao_social': 'AMIL', 'uf': 'SP', 'status': 'Ativa'},
+          ],
+          'total': 1,
+          'page': 1,
+          'limit': 15,
+          'total_pages': 1,
+        });
+      }),
+    );
+    final vm = OperadorasViewModel(OperadoraRepository(OperadoraService(client)));
 
-      final apiClient = ApiClient(httpClient: mockHttp)..setAuthToken('token');
-      final opVm = OperadoraViewModel(OperadoraRepository(OperadoraService(apiClient)));
+    await vm.carregar(search: '29.309.127/0001-79', resumo: true);
+    expect(busca, '29.309.127/0001-79');
+    expect(vm.items.single.registroAns, '326305');
+    expect(vm.resumo.ativas, 1101);
+    expect(vm.resumo.modalidades, ['Medicina de Grupo']);
+  });
 
-      final ok = await opVm.createOperadora(
-        const OperadoraModel(
-          registroAns: '999001',
-          cnpj: '12345678000199',
-          razaoSocial: 'Teste LTDA',
-          uf: 'PB',
-        ),
-      );
-
-      expect(ok, false);
-      expect(opVm.errorMessage, contains('CNPJ inválido'));
-    });
+  test('ContasViewModel expõe erro 403 ao auditar lote sem permissão', () async {
+    final client = ApiClient(
+      httpClient: MockClient((req) async {
+        if (req.url.path.contains('/auditar')) {
+          return _json({'erro': 'Ação permitida apenas para o perfil Administrador.'}, 403);
+        }
+        return _json({
+          'periodo': {'ano': 2026, 'trimestre': 2},
+          'periodo_anterior': {'ano': 2026, 'trimestre': 1},
+          'periodos': [
+            {'ano': 2026, 'trimestre': 2},
+          ],
+          'grupos': [],
+          'kpis': {},
+          'contas': [],
+          'composicao': [],
+          'destaques': [],
+          'lote': {'auditado': false},
+        });
+      }),
+    );
+    final vm = ContasViewModel(AnaliticoRepository(AnaliticoService(client)));
+    await vm.carregar();
+    expect(vm.contas, isNotNull);
+    expect(await vm.auditarLote(), isNull);
+    expect(vm.error, contains('Administrador'));
   });
 }
