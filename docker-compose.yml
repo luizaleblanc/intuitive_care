@@ -2,36 +2,27 @@ version: '3.8'
 
 services:
   api:
-    build: 
+    build:
       context: .
-      dockerfile: api/Dockerfile
+      dockerfile: backend/Dockerfile
     ports:
       - "5000:5000"
     volumes:
       - .:/app
     environment:
+      - APP_ENV=development
+      - DB_ENGINE=mysql
       - DB_HOST=db
+      - DB_PORT=3306
       - DB_USER=root
       - DB_PASSWORD=root
       - DB_NAME=intuitive_care
+      - EMAIL_PROVIDER=mock
     depends_on:
-      - db
-    command: >
-      sh -c "pip install pymysql && pip install -r requirements.txt && python api/main_api.py"
+      db:
+        condition: service_healthy
+    command: python -m backend.app
 
-  web-app:
-    build:
-      context: ./web-app      
-      dockerfile: Dockerfile  
-    ports:
-      - "8080:80"
-    volumes:
-      - ./web-app:/app
-      - /app/node_modules
-    environment:
-      - VITE_API_URL=http://localhost:5000
-    depends_on:
-      - api
   db:
     image: mysql:8.0
     command: --default-authentication-plugin=mysql_native_password
@@ -42,6 +33,12 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./backend/database/backup_intuitive_care.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   mysql_data:

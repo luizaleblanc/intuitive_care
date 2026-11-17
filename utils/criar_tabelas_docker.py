@@ -1,43 +1,25 @@
-import mysql.connector
+import os
+import sys
 
-db_config = {
-    'user': 'root',
-    'password': 'root',     
-    'host': '127.0.0.1',
-    'port': 3307,           
-    'database': 'intuitive_care'
-}
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 
-print("Conectando ao banco do Docker...")
-conn = mysql.connector.connect(**db_config)
-cursor = conn.cursor()
+from backend.database.init_db import initialize_database
 
-tabelas = [
-    """
-    CREATE TABLE IF NOT EXISTS operadoras (
-        reg_ans VARCHAR(20) PRIMARY KEY,
-        cnpj VARCHAR(20),
-        razao_social VARCHAR(255),
-        modalidade VARCHAR(100),
-        uf CHAR(2)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS despesas (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        reg_ans VARCHAR(20),
-        trimestre INT,
-        ano INT,
-        valor_despesa DECIMAL(15, 2),
-        INDEX idx_reg_ans (reg_ans)
-    )
-    """
-]
 
-for sql in tabelas:
-    cursor.execute(sql)
+def main():
+    db_host = os.getenv("DB_HOST", "127.0.0.1")
+    db_port = os.getenv("DB_PORT", "3307")
+    db_user = os.getenv("DB_USER", "root")
+    db_pass = os.getenv("DB_PASSWORD", "root")
+    db_name = os.getenv("DB_NAME", "intuitive_care")
 
-conn.commit()
-print("Sucesso! Tabelas criadas no Docker.")
-cursor.close()
-conn.close()
+    url = f"mysql+pymysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}?charset=utf8mb4"
+    print(f"Inicializando schema e dados em {db_host}:{db_port}/{db_name}...")
+    initialize_database(database_url=url, seed=True)
+    print("Sucesso! Tabelas, relacionamentos e massa inicial verificados.")
+
+
+if __name__ == "__main__":
+    main()
