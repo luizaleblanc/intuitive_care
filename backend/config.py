@@ -1,5 +1,24 @@
 import os
 
+_RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _carregar_env():
+    """Carrega variáveis de `.env` (raiz do projeto e backend/) sem sobrescrever as já definidas."""
+    for caminho in (os.path.join(_RAIZ, ".env"), os.path.join(_RAIZ, "backend", ".env")):
+        if not os.path.exists(caminho):
+            continue
+        with open(caminho, encoding="utf-8") as arquivo:
+            for linha in arquivo:
+                linha = linha.strip()
+                if not linha or linha.startswith("#") or "=" not in linha:
+                    continue
+                chave, valor = linha.split("=", 1)
+                os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
+
+
+_carregar_env()
+
 
 class Config:
     """Configurações centralizadas da aplicação Flask."""
