@@ -17,12 +17,17 @@ class DespesaService:
     """Regras de negócio centralizadas para lançamentos de despesas assistenciais."""
 
     @staticmethod
+    def anos_disponiveis():
+        return DespesaRepository.anos_disponiveis()
+
+    @staticmethod
     def listar(
         page: int = 1,
         limit: int = 20,
         reg_ans: str = "",
         ano: Optional[int] = None,
         trimestre: Optional[int] = None,
+        semestre: Optional[int] = None,
     ) -> Dict[str, Any]:
         page = max(1, page)
         limit = min(max(1, limit), 100)
@@ -34,6 +39,7 @@ class DespesaService:
             reg_ans=clean_reg,
             ano=ano,
             trimestre=trimestre,
+            semestre=semestre,
         )
         total_pages = max(1, (total + limit - 1) // limit)
         return {

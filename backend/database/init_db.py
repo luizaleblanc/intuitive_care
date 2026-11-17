@@ -1,7 +1,7 @@
 from typing import Optional
 
 from sqlalchemy import text
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from backend.database.connection import get_connection
 
@@ -13,7 +13,7 @@ SQLITE_SCHEMA_STATEMENTS = [
         nome TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         senha_hash TEXT NOT NULL,
-        perfil TEXT NOT NULL DEFAULT 'ANALISTA',
+        perfil TEXT NOT NULL DEFAULT 'CONSUMIDOR',
         ativo INTEGER NOT NULL DEFAULT 1,
         criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -77,6 +77,55 @@ SQLITE_SCHEMA_STATEMENTS = [
         FOREIGN KEY (reg_ans) REFERENCES operadoras(registro_ans) ON DELETE RESTRICT ON UPDATE CASCADE
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS demonstracoes_operadora (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reg_ans TEXT NOT NULL,
+        ano INTEGER NOT NULL,
+        trimestre INTEGER NOT NULL,
+        contraprestacoes NUMERIC(18, 2) NOT NULL DEFAULT 0,
+        eventos NUMERIC(18, 2) NOT NULL DEFAULT 0,
+        eventos_mh NUMERIC(18, 2) NOT NULL DEFAULT 0,
+        comercializacao NUMERIC(18, 2) NOT NULL DEFAULT 0,
+        administrativas NUMERIC(18, 2) NOT NULL DEFAULT 0,
+        UNIQUE (reg_ans, ano, trimestre)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contas_setor (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ano INTEGER NOT NULL,
+        trimestre INTEGER NOT NULL,
+        codigo TEXT NOT NULL,
+        descricao TEXT NOT NULL,
+        nivel INTEGER NOT NULL,
+        valor NUMERIC(18, 2) NOT NULL DEFAULT 0,
+        UNIQUE (ano, trimestre, codigo)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS beneficiarios_trimestre (
+        reg_ans TEXT NOT NULL,
+        ano INTEGER NOT NULL,
+        trimestre INTEGER NOT NULL,
+        medico_hospitalar INTEGER NOT NULL DEFAULT 0,
+        odontologico INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (reg_ans, ano, trimestre)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS lotes_etl (
+        ano INTEGER NOT NULL,
+        trimestre INTEGER NOT NULL,
+        registros_extraidos INTEGER NOT NULL DEFAULT 0,
+        operadoras INTEGER NOT NULL DEFAULT 0,
+        carregado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        auditado INTEGER NOT NULL DEFAULT 0,
+        auditado_por TEXT,
+        auditado_em TIMESTAMP,
+        PRIMARY KEY (ano, trimestre)
+    )
+    """,
 ]
 
 MYSQL_SCHEMA_STATEMENTS = [
@@ -86,7 +135,7 @@ MYSQL_SCHEMA_STATEMENTS = [
         nome VARCHAR(120) NOT NULL,
         email VARCHAR(180) NOT NULL UNIQUE,
         senha_hash VARCHAR(255) NOT NULL,
-        perfil VARCHAR(30) NOT NULL DEFAULT 'ANALISTA',
+        perfil VARCHAR(30) NOT NULL DEFAULT 'CONSUMIDOR',
         ativo TINYINT(1) NOT NULL DEFAULT 1,
         criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -165,7 +214,146 @@ MYSQL_SCHEMA_STATEMENTS = [
             ON DELETE RESTRICT ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
+    """
+    CREATE TABLE IF NOT EXISTS demonstracoes_operadora (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        reg_ans VARCHAR(20) NOT NULL,
+        ano INT NOT NULL,
+        trimestre TINYINT NOT NULL,
+        contraprestacoes DECIMAL(18, 2) NOT NULL DEFAULT 0,
+        eventos DECIMAL(18, 2) NOT NULL DEFAULT 0,
+        eventos_mh DECIMAL(18, 2) NOT NULL DEFAULT 0,
+        comercializacao DECIMAL(18, 2) NOT NULL DEFAULT 0,
+        administrativas DECIMAL(18, 2) NOT NULL DEFAULT 0,
+        UNIQUE KEY uq_demonstracao (reg_ans, ano, trimestre),
+        INDEX idx_demonstracao_periodo (ano, trimestre)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contas_setor (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ano INT NOT NULL,
+        trimestre TINYINT NOT NULL,
+        codigo VARCHAR(12) NOT NULL,
+        descricao VARCHAR(255) NOT NULL,
+        nivel TINYINT NOT NULL,
+        valor DECIMAL(18, 2) NOT NULL DEFAULT 0,
+        UNIQUE KEY uq_conta_periodo (ano, trimestre, codigo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS beneficiarios_trimestre (
+        reg_ans VARCHAR(20) NOT NULL,
+        ano INT NOT NULL,
+        trimestre TINYINT NOT NULL,
+        medico_hospitalar INT NOT NULL DEFAULT 0,
+        odontologico INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (reg_ans, ano, trimestre),
+        INDEX idx_benef_periodo (ano, trimestre)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS lotes_etl (
+        ano INT NOT NULL,
+        trimestre TINYINT NOT NULL,
+        registros_extraidos INT NOT NULL DEFAULT 0,
+        operadoras INT NOT NULL DEFAULT 0,
+        carregado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        auditado TINYINT(1) NOT NULL DEFAULT 0,
+        auditado_por VARCHAR(120),
+        auditado_em DATETIME,
+        PRIMARY KEY (ano, trimestre)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
 ]
+
+
+# Colunas adicionadas após a versão inicial do schema (migração idempotente).
+COLUNAS_ADICIONAIS = {
+    "usuarios": [
+        ("cargo", "VARCHAR(120)", "TEXT"),
+        ("telefone", "VARCHAR(30)", "TEXT"),
+        ("data_nascimento", "DATE", "DATE"),
+        ("foto", "MEDIUMTEXT", "TEXT"),
+        ("preferencias", "TEXT", "TEXT"),
+        ("ultimo_acesso", "DATETIME", "TIMESTAMP"),
+    ],
+    "operadoras": [
+        ("status", "VARCHAR(20) NOT NULL DEFAULT 'Ativa'", "TEXT NOT NULL DEFAULT 'Ativa'"),
+        ("beneficiarios", "INT NOT NULL DEFAULT 0", "INTEGER NOT NULL DEFAULT 0"),
+        ("beneficiarios_mh", "INT NOT NULL DEFAULT 0", "INTEGER NOT NULL DEFAULT 0"),
+        ("data_descredenciamento", "DATE", "DATE"),
+    ],
+}
+
+USUARIOS_DEMONSTRACAO = [
+    {
+        "nome": "Luiza Leblanc",
+        "email": "admin@intuitivecare.com.br",
+        "senha": "Admin@2025",
+        "perfil": "ADMIN",
+        "cargo": "Analista de Dados ANS",
+    },
+    {
+        "nome": "Consulta Intuitive Care",
+        "email": "consumidor@intuitivecare.com.br",
+        "senha": "Consulta@2025",
+        "perfil": "CONSUMIDOR",
+        "cargo": "Analista de Negócios",
+    },
+]
+
+
+def _colunas_existentes(conn, tabela: str) -> set:
+    if conn.dialect.name == "sqlite":
+        return {r[1] for r in conn.execute(text(f"PRAGMA table_info({tabela})")).all()}
+    return {
+        r[0]
+        for r in conn.execute(
+            text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t"
+            ),
+            {"t": tabela},
+        ).all()
+    }
+
+
+def migrar_schema(conn) -> None:
+    sqlite = conn.dialect.name == "sqlite"
+    for tabela, colunas in COLUNAS_ADICIONAIS.items():
+        existentes = _colunas_existentes(conn, tabela)
+        for nome, tipo_mysql, tipo_sqlite in colunas:
+            if nome not in existentes:
+                conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo_sqlite if sqlite else tipo_mysql}"))
+    # Perfil legado "ANALISTA" passa a ser "CONSUMIDOR" (somente leitura).
+    conn.execute(text("UPDATE usuarios SET perfil = 'CONSUMIDOR' WHERE perfil NOT IN ('ADMIN', 'CONSUMIDOR')"))
+
+
+def garantir_usuarios_demonstracao(conn) -> None:
+    for u in USUARIOS_DEMONSTRACAO:
+        row = conn.execute(
+            text("SELECT id, senha_hash FROM usuarios WHERE LOWER(email) = :e"), {"e": u["email"]}
+        ).first()
+        if row is None:
+            conn.execute(
+                text(
+                    "INSERT INTO usuarios (nome, email, senha_hash, perfil, ativo, cargo) "
+                    "VALUES (:nome, :email, :h, :perfil, 1, :cargo)"
+                ),
+                {**u, "h": generate_password_hash(u["senha"], method="pbkdf2:sha256")},
+            )
+        else:
+            conn.execute(
+                text("UPDATE usuarios SET perfil = :perfil, cargo = COALESCE(cargo, :cargo) WHERE id = :id"),
+                {"perfil": u["perfil"], "cargo": u["cargo"], "id": row[0]},
+            )
+            # Migra a senha legada da conta de demonstração para a do MVP.
+            if u["perfil"] == "ADMIN" and check_password_hash(row[1], "Senha@123"):
+                conn.execute(
+                    text("UPDATE usuarios SET senha_hash = :h WHERE id = :id"),
+                    {"h": generate_password_hash(u["senha"], method="pbkdf2:sha256"), "id": row[0]},
+                )
 
 
 SEED_OPERADORAS = [
@@ -214,24 +402,12 @@ def initialize_database(database_url: Optional[str] = None, seed: bool = True) -
         statements = SQLITE_SCHEMA_STATEMENTS if dialect == "sqlite" else MYSQL_SCHEMA_STATEMENTS
         for stmt in statements:
             conn.execute(text(stmt))
+        migrar_schema(conn)
+        garantir_usuarios_demonstracao(conn)
 
         if not seed:
             return
 
-        users_count = conn.execute(text("SELECT COUNT(*) FROM usuarios")).scalar_one()
-        if users_count == 0:
-            conn.execute(
-                text(
-                    "INSERT INTO usuarios (nome, email, senha_hash, perfil, ativo) "
-                    "VALUES (:nome, :email, :senha_hash, :perfil, 1)"
-                ),
-                {
-                    "nome": "Luiza Leblanc (Analista ANS)",
-                    "email": "admin@intuitivecare.com.br",
-                    "senha_hash": generate_password_hash("Senha@123", method="pbkdf2:sha256"),
-                    "perfil": "ADMIN",
-                },
-            )
 
         ops_count = conn.execute(text("SELECT COUNT(*) FROM operadoras")).scalar_one()
         if ops_count == 0:

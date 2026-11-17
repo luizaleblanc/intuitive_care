@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -10,7 +11,7 @@ from typing import Any, Dict
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from backend.config import Config
-from backend.models.usuario_model import Usuario
+from backend.models.usuario_model import PREFERENCIAS_PADRAO, Usuario
 from backend.repositories.usuario_repository import UsuarioRepository
 from backend.services.email_service import EmailService
 from backend.services.validators import BusinessRuleError, validate_email, validate_password
@@ -94,7 +95,7 @@ class AuthService:
             raise BusinessRuleError("Já existe um usuário cadastrado com este e-mail.", 409)
 
         senha_hash = generate_password_hash(password, method="pbkdf2:sha256")
-        user_row = UsuarioRepository.create_user(nome=nome, email=email, senha_hash=senha_hash, perfil="ANALISTA")
+        user_row = UsuarioRepository.create_user(nome=nome, email=email, senha_hash=senha_hash, perfil="CONSUMIDOR")
         user = Usuario.from_row(user_row)
 
         jti = uuid.uuid4().hex
@@ -123,7 +124,8 @@ class AuthService:
         if not bool(user_row.get("ativo", 1)):
             raise BusinessRuleError("Conta de usuário desativada.", 403)
 
-        user = Usuario.from_row(user_row)
+        UsuarioRepository.touch_ultimo_acesso(user_row["id"])
+        user = Usuario.from_row(UsuarioRepository.find_by_id(user_row["id"]) or user_row)
         jti = uuid.uuid4().hex
         expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=Config.TOKEN_EXPIRATION_HOURS)
         UsuarioRepository.save_session_token(user.id, jti, expires_at)  # type: ignore[arg-type]
@@ -143,10 +145,66 @@ class AuthService:
 
     @staticmethod
     def update_profile(user_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
-        nome = (data.get("nome") or "").strip()
-        if len(nome) < 3:
-            raise BusinessRuleError("O nome completo deve ter pelo menos 3 caracteres.", 400)
-        updated = UsuarioRepository.update_user_profile(user_id, nome)
+        campos: Dict[str, Any] = {}
+
+        if "nome" in data:
+            nome = (data.get("nome") or "").strip()
+            if len(nome) < 3:
+                raise BusinessRuleError("O nome completo deve ter pelo menos 3 caracteres.", 400)
+            campos["nome"] = nome[:120]
+
+        if "email" in data:
+            email = validate_email(data.get("email"))
+            dono = UsuarioRepository.find_by_email(email)
+            if dono and int(dono["id"]) != int(user_id):
+                raise BusinessRuleError("Este e-mail já está em uso por outro usuário.", 409)
+            campos["email"] = email
+
+        for chave, limite in (("cargo", 120), ("telefone", 30)):
+            if chave in data:
+                valor = (data.get(chave) or "").strip()
+                campos[chave] = valor[:limite] or None
+
+        if "data_nascimento" in data:
+            valor = (data.get("data_nascimento") or "").strip()
+            if valor:
+                try:
+                    nascimento = datetime.strptime(valor[:10], "%Y-%m-%d").date()
+                except ValueError:
+                    raise BusinessRuleError("Data de nascimento inválida. Use o formato AAAA-MM-DD.", 400)
+                if nascimento > datetime.now().date():
+                    raise BusinessRuleError("A data de nascimento não pode estar no futuro.", 400)
+                campos["data_nascimento"] = nascimento
+            else:
+                campos["data_nascimento"] = None
+
+        if "foto" in data:
+            foto = data.get("foto")
+            if foto:
+                if not re.match(r"^data:image/(png|jpe?g);base64,", str(foto)):
+                    raise BusinessRuleError("A foto deve ser uma imagem JPG ou PNG.", 400)
+                # Base64 ocupa ~4/3 do arquivo original: 2 MB -> ~2,8 MB de texto.
+                if len(foto) > 2_800_000:
+                    raise BusinessRuleError("A foto deve ter no máximo 2 MB.", 400)
+            campos["foto"] = foto or None
+
+        if "preferencias" in data:
+            prefs = data.get("preferencias") or {}
+            if not isinstance(prefs, dict):
+                raise BusinessRuleError("Preferências inválidas.", 400)
+            limpas = {k: prefs[k] for k in PREFERENCIAS_PADRAO if k in prefs}
+            if limpas.get("tema") not in (None, "claro", "escuro", "sistema"):
+                raise BusinessRuleError("Tema inválido.", 400)
+            if limpas.get("formato_exportacao") not in (None, "CSV", "PDF", "XLSX"):
+                raise BusinessRuleError("Formato de exportação inválido.", 400)
+            if limpas.get("trimestre_padrao") not in (None, 1, 2, 3, 4):
+                raise BusinessRuleError("Trimestre padrão inválido.", 400)
+            atual = UsuarioRepository.find_by_id(user_id) or {}
+            base = Usuario.from_row(atual).preferencias if atual else dict(PREFERENCIAS_PADRAO)
+            base.update(limpas)
+            campos["preferencias"] = json.dumps(base, ensure_ascii=False)
+
+        updated = UsuarioRepository.update_user_profile(user_id, campos)
         if not updated:
             raise BusinessRuleError("Usuário não encontrado.", 404)
         return {

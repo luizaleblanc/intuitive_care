@@ -15,6 +15,7 @@ class DespesaRepository:
         reg_ans: str = "",
         ano: Optional[int] = None,
         trimestre: Optional[int] = None,
+        semestre: Optional[int] = None,
     ) -> Tuple[List[Dict[str, Any]], int]:
         offset = (page - 1) * limit
         where_clauses = ["1=1"]
@@ -29,6 +30,11 @@ class DespesaRepository:
         if trimestre is not None:
             where_clauses.append("d.trimestre = :trimestre")
             params["trimestre"] = trimestre
+        if semestre is not None:
+            # 1º semestre = trimestres 1 e 2; 2º semestre = trimestres 3 e 4.
+            where_clauses.append("d.trimestre BETWEEN :tri_ini AND :tri_fim")
+            params["tri_ini"] = 1 if semestre == 1 else 3
+            params["tri_fim"] = 2 if semestre == 1 else 4
 
         where_sql = " AND ".join(where_clauses)
 
@@ -54,6 +60,12 @@ class DespesaRepository:
                 .all()
             )
             return [dict(r) for r in rows], int(total)
+
+    @staticmethod
+    def anos_disponiveis() -> List[int]:
+        with get_connection() as conn:
+            rows = conn.execute(text("SELECT DISTINCT ano FROM despesas ORDER BY ano DESC")).all()
+            return [int(r[0]) for r in rows]
 
     @staticmethod
     def list_by_operadora(registro_ans: str) -> List[Dict[str, Any]]:

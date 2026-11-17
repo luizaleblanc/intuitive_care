@@ -1,9 +1,14 @@
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 from flask import Flask, jsonify
 from flask_cors import CORS
 
 from backend.config import Config
 from backend.database.init_db import initialize_database
+from backend.routes.analitico_routes import analitico_bp
 from backend.routes.auth_routes import auth_bp
 from backend.routes.despesa_routes import despesa_bp
 from backend.routes.estatistica_routes import estatistica_bp
@@ -25,6 +30,7 @@ def create_app(init_db: bool = True, seed_db: bool = True) -> Flask:
     app.register_blueprint(operadora_bp)
     app.register_blueprint(despesa_bp)
     app.register_blueprint(estatistica_bp)
+    app.register_blueprint(analitico_bp)
 
     @app.errorhandler(BusinessRuleError)
     def handle_business_error(err: BusinessRuleError):

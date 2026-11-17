@@ -29,3 +29,16 @@ def token_required(fn):
         return fn(*args, **kwargs)
 
     return wrapper
+
+
+def admin_required(fn):
+    """Exige perfil ADMIN. Usar abaixo de @token_required."""
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user = getattr(g, "current_user", None)
+        if user is None or user.perfil != "ADMIN":
+            raise BusinessRuleError("Ação permitida apenas para o perfil Administrador.", 403)
+        return fn(*args, **kwargs)
+
+    return wrapper

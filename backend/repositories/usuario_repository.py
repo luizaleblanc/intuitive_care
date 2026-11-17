@@ -36,7 +36,7 @@ class UsuarioRepository:
             return dict(row) if row else None
 
     @staticmethod
-    def create_user(nome: str, email: str, senha_hash: str, perfil: str = "ANALISTA") -> Dict[str, Any]:
+    def create_user(nome: str, email: str, senha_hash: str, perfil: str = "CONSUMIDOR") -> Dict[str, Any]:
         with get_connection() as conn:
             result = conn.execute(
                 text(
@@ -54,18 +54,28 @@ class UsuarioRepository:
             return dict(row)
 
     @staticmethod
-    def update_user_profile(user_id: int, nome: str) -> Optional[Dict[str, Any]]:
+    def update_user_profile(user_id: int, campos: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        permitidos = ["nome", "email", "cargo", "telefone", "data_nascimento", "foto", "preferencias"]
+        sets = [f"{c} = :{c}" for c in permitidos if c in campos]
         with get_connection() as conn:
-            conn.execute(
-                text("UPDATE usuarios SET nome = :nome WHERE id = :id"),
-                {"nome": nome, "id": user_id},
-            )
+            if sets:
+                params = {c: campos[c] for c in permitidos if c in campos}
+                params["id"] = user_id
+                conn.execute(text(f"UPDATE usuarios SET {', '.join(sets)} WHERE id = :id"), params)
             row = (
                 conn.execute(text("SELECT * FROM usuarios WHERE id = :id"), {"id": user_id})
                 .mappings()
                 .first()
             )
             return dict(row) if row else None
+
+    @staticmethod
+    def touch_ultimo_acesso(user_id: int) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                text("UPDATE usuarios SET ultimo_acesso = :agora WHERE id = :id"),
+                {"agora": datetime.now(timezone.utc).replace(tzinfo=None), "id": user_id},
+            )
 
     @staticmethod
     def update_password(user_id: int, senha_hash: str) -> None:

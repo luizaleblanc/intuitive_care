@@ -1,6 +1,28 @@
-from dataclasses import dataclass
-from datetime import datetime
+import json
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any, Dict, Optional
+
+PERFIS_VALIDOS = ("ADMIN", "CONSUMIDOR")
+
+PREFERENCIAS_PADRAO: Dict[str, Any] = {
+    "idioma": "pt-BR",
+    "formato_data": "DD/MM/AAAA",
+    "formato_exportacao": "CSV",
+    "uf_padrao": None,
+    "trimestre_padrao": 4,
+    "tema": "claro",
+    "resumo_semanal": True,
+    "alerta_novos_dados": True,
+}
+
+
+def _iso(valor: Any) -> Optional[str]:
+    if valor is None:
+        return None
+    if isinstance(valor, (datetime, date)):
+        return valor.isoformat()
+    return str(valor)
 
 
 @dataclass
@@ -10,19 +32,43 @@ class Usuario:
     id: Optional[int]
     nome: str
     email: str
-    perfil: str = "ANALISTA"
+    perfil: str = "CONSUMIDOR"
     ativo: bool = True
-    criado_em: Optional[datetime] = None
+    criado_em: Optional[Any] = None
+    cargo: Optional[str] = None
+    telefone: Optional[str] = None
+    data_nascimento: Optional[Any] = None
+    foto: Optional[str] = None
+    ultimo_acesso: Optional[Any] = None
+    preferencias: Dict[str, Any] = field(default_factory=lambda: dict(PREFERENCIAS_PADRAO))
+
+    @property
+    def is_admin(self) -> bool:
+        return self.perfil == "ADMIN"
 
     @classmethod
     def from_row(cls, row: Dict[str, Any]) -> "Usuario":
+        prefs = dict(PREFERENCIAS_PADRAO)
+        bruto = row.get("preferencias")
+        if bruto:
+            try:
+                prefs.update(json.loads(bruto))
+            except (TypeError, ValueError):
+                pass
+        perfil = row.get("perfil") or "CONSUMIDOR"
         return cls(
             id=row.get("id"),
             nome=row["nome"],
             email=row["email"],
-            perfil=row.get("perfil", "ANALISTA"),
+            perfil=perfil if perfil in PERFIS_VALIDOS else "CONSUMIDOR",
             ativo=bool(row.get("ativo", 1)),
             criado_em=row.get("criado_em"),
+            cargo=row.get("cargo"),
+            telefone=row.get("telefone"),
+            data_nascimento=row.get("data_nascimento"),
+            foto=row.get("foto"),
+            ultimo_acesso=row.get("ultimo_acesso"),
+            preferencias=prefs,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -32,5 +78,12 @@ class Usuario:
             "email": self.email,
             "perfil": self.perfil,
             "ativo": self.ativo,
-            "criado_em": self.criado_em.isoformat() if hasattr(self.criado_em, "isoformat") else self.criado_em,
+            "cargo": self.cargo,
+            "telefone": self.telefone,
+            "data_nascimento": _iso(self.data_nascimento),
+            "foto": self.foto,
+            "criado_em": _iso(self.criado_em),
+            "membro_desde": _iso(self.criado_em),
+            "ultimo_acesso": _iso(self.ultimo_acesso),
+            "preferencias": self.preferencias,
         }

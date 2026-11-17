@@ -30,7 +30,7 @@ class IntuitiveCareApiTestCase(unittest.TestCase):
     def _login_demo(self) -> str:
         res = self.client.post(
             "/api/auth/login",
-            json={"email": "admin@intuitivecare.com.br", "senha": "Senha@123"},
+            json={"email": "admin@intuitivecare.com.br", "senha": "Admin@2025"},
         )
         self.assertEqual(res.status_code, 200)
         return res.get_json()["token"]
@@ -129,7 +129,7 @@ class IntuitiveCareApiTestCase(unittest.TestCase):
         # Senha antiga falha, senha nova autentica
         old_login = self.client.post(
             "/api/auth/login",
-            json={"email": "admin@intuitivecare.com.br", "senha": "Senha@123"},
+            json={"email": "admin@intuitivecare.com.br", "senha": "Admin@2025"},
         )
         self.assertEqual(old_login.status_code, 401)
 
@@ -278,3 +278,107 @@ class IntuitiveCareApiTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
+    """Regras de perfil do MVP (ADMIN x CONSUMIDOR) e endpoints analíticos."""
+
+    def _login(self, email: str, senha: str) -> str:
+        res = self.client.post("/api/auth/login", json={"email": email, "senha": senha})
+        self.assertEqual(res.status_code, 200, res.get_json())
+        return res.get_json()["token"]
+
+    def _seed_analitico(self):
+        from sqlalchemy import text
+
+        from backend.database.connection import get_connection
+
+        with get_connection() as conn:
+            conn.execute(text("UPDATE operadoras SET status = 'Inativa' WHERE registro_ans = '352501'"))
+            for ano, tri, ev, cp in ((2026, 1, 100.0, 140.0), (2026, 2, 110.0, 150.0)):
+                conn.execute(
+                    text(
+                        "INSERT INTO demonstracoes_operadora (reg_ans, ano, trimestre, contraprestacoes, eventos, "
+                        "eventos_mh, comercializacao, administrativas) VALUES ('326305', :a, :t, :cp, :ev, :ev, 5, 9)"
+                    ),
+                    {"a": ano, "t": tri, "ev": ev, "cp": cp},
+                )
+                conn.execute(
+                    text(
+                        "INSERT INTO contas_setor (ano, trimestre, codigo, descricao, nivel, valor) "
+                        "VALUES (:a, :t, '41', 'EVENTOS', 0, :ev), (:a, :t, '41111', 'PROC', 3, :ev)"
+                    ),
+                    {"a": ano, "t": tri, "ev": ev},
+                )
+                conn.execute(
+                    text("INSERT INTO lotes_etl (ano, trimestre, registros_extraidos, operadoras) VALUES (:a, :t, 10, 1)"),
+                    {"a": ano, "t": tri},
+                )
+
+    def test_consumidor_somente_leitura(self):
+        token = self._login("consumidor@intuitivecare.com.br", "Consulta@2025")
+        h = self._auth_headers(token)
+        me = self.client.get("/api/auth/me", headers=h).get_json()["usuario"]
+        self.assertEqual(me["perfil"], "CONSUMIDOR")
+        self.assertEqual(self.client.post("/api/operadoras", json={}, headers=h).status_code, 403)
+        self.assertEqual(
+            self.client.patch("/api/operadoras/326305/status", json={"status": "Inativa"}, headers=h).status_code, 403
+        )
+        self.assertEqual(self.client.delete("/api/operadoras/326305", headers=h).status_code, 403)
+
+    def test_inativas_visiveis_somente_para_admin(self):
+        self._seed_analitico()
+        admin = self._auth_headers(self._login("admin@intuitivecare.com.br", "Admin@2025"))
+        cons = self._auth_headers(self._login("consumidor@intuitivecare.com.br", "Consulta@2025"))
+        total_admin = self.client.get("/api/operadoras", headers=admin).get_json()["total"]
+        total_cons = self.client.get("/api/operadoras", headers=cons).get_json()["total"]
+        self.assertEqual(total_admin, total_cons + 1)
+        self.assertEqual(self.client.get("/api/operadoras/352501", headers=cons).status_code, 404)
+
+    def test_busca_cnpj_com_mascara(self):
+        admin = self._auth_headers(self._login("admin@intuitivecare.com.br", "Admin@2025"))
+        res = self.client.get("/api/operadoras?search=00.011.122/0001-83", headers=admin).get_json()
+        self.assertEqual([o["registro_ans"] for o in res["data"]], ["326305"])
+
+    def test_painel_contas_e_auditoria(self):
+        self._seed_analitico()
+        admin = self._auth_headers(self._login("admin@intuitivecare.com.br", "Admin@2025"))
+        painel = self.client.get("/api/painel", headers=admin).get_json()
+        self.assertEqual(painel["periodo"], {"ano": 2026, "trimestre": 2})
+        self.assertAlmostEqual(painel["admin"]["total_despesas"], 110.0)
+        self.assertAlmostEqual(painel["consumidor"]["sinistralidade"], 110 / 150)
+        self.assertEqual(len(painel["admin"]["serie"]), 2)
+
+        contas = self.client.get("/api/contas?ano=2026&trimestre=2", headers=admin).get_json()
+        self.assertAlmostEqual(contas["kpis"]["41"]["valor_atual"], 110.0)
+        self.assertAlmostEqual(contas["kpis"]["41"]["valor_anterior"], 100.0)
+        self.assertFalse(contas["lote"]["auditado"])
+
+        res = self.client.post("/api/contas/lotes/2026/2/auditar", headers=admin)
+        self.assertEqual(res.status_code, 200)
+        contas = self.client.get("/api/contas?ano=2026&trimestre=2", headers=admin).get_json()
+        self.assertTrue(contas["lote"]["auditado"])
+
+        cons = self._auth_headers(self._login("consumidor@intuitivecare.com.br", "Consulta@2025"))
+        self.assertEqual(self.client.post("/api/contas/lotes/2026/1/auditar", headers=cons).status_code, 403)
+
+    def test_perfil_preferencias_e_foto(self):
+        h = self._auth_headers(self._login("consumidor@intuitivecare.com.br", "Consulta@2025"))
+        res = self.client.put(
+            "/api/auth/me",
+            json={
+                "cargo": "Analista Externo",
+                "data_nascimento": "1994-03-12",
+                "foto": "data:image/png;base64,iVBORw0KGgo=",
+                "preferencias": {"tema": "sistema", "formato_exportacao": "PDF"},
+            },
+            headers=h,
+        )
+        self.assertEqual(res.status_code, 200, res.get_json())
+        u = res.get_json()["usuario"]
+        self.assertEqual(u["cargo"], "Analista Externo")
+        self.assertEqual(u["data_nascimento"], "1994-03-12")
+        self.assertEqual(u["preferencias"]["formato_exportacao"], "PDF")
+        self.assertEqual(u["preferencias"]["idioma"], "pt-BR")
+        ruim = self.client.put("/api/auth/me", json={"foto": "data:image/gif;base64,AAA"}, headers=h)
+        self.assertEqual(ruim.status_code, 400)

@@ -1,6 +1,6 @@
 from typing import Any, Dict
 
-from backend.models.operadora_model import Operadora
+from backend.models.operadora_model import STATUS_VALIDOS, Operadora
 from backend.repositories.operadora_repository import OperadoraRepository
 from backend.services.validators import (
     BusinessRuleError,
@@ -16,10 +16,29 @@ class OperadoraService:
     """Regras de negócio centralizadas para gestão de operadoras de saúde (ANS)."""
 
     @staticmethod
-    def listar(page: int = 1, limit: int = 10, search: str = "", uf: str = "") -> Dict[str, Any]:
+    def listar(
+        page: int = 1,
+        limit: int = 10,
+        search: str = "",
+        uf: str = "",
+        modalidade: str = "",
+        status: str = "",
+        is_admin: bool = False,
+    ) -> Dict[str, Any]:
         page = max(1, page)
         limit = min(max(1, limit), 100)
-        rows, total = OperadoraRepository.list_paginated(page=page, limit=limit, search=search.strip(), uf=uf.strip())
+        # Regra do MVP: operadoras inativas só aparecem para o Administrador.
+        if not is_admin and status == "Inativa":
+            status = "__nenhum__"
+        rows, total = OperadoraRepository.list_paginated(
+            page=page,
+            limit=limit,
+            search=search.strip(),
+            uf=uf.strip(),
+            modalidade=modalidade.strip(),
+            status=status.strip(),
+            incluir_inativas=is_admin,
+        )
         total_pages = max(1, (total + limit - 1) // limit)
         return {
             "data": [Operadora.from_row(row).to_dict() for row in rows],
@@ -30,12 +49,52 @@ class OperadoraService:
         }
 
     @staticmethod
-    def obter_por_identificador(identifier: str) -> Dict[str, Any]:
+    def resumo(is_admin: bool = False) -> Dict[str, Any]:
+        return OperadoraRepository.resumo(incluir_inativas=is_admin)
+
+    @staticmethod
+    def exportar_csv(search: str = "", uf: str = "", modalidade: str = "", is_admin: bool = False) -> str:
+        import csv
+        import io
+
+        rows = OperadoraRepository.list_all(
+            search=search.strip(), uf=uf.strip(), modalidade=modalidade.strip(), incluir_inativas=is_admin
+        )
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, delimiter=";")
+        writer.writerow(["Registro ANS", "CNPJ", "Razão Social", "Nome Fantasia", "Modalidade", "UF",
+                         "Beneficiários", "Despesa do trimestre (R$)", "Status"])
+        for r in rows:
+            op = Operadora.from_row(r)
+            writer.writerow([
+                op.registro_ans, op.cnpj, op.razao_social, op.nome_fantasia or "", op.modalidade or "", op.uf,
+                op.beneficiarios, f"{(op.despesa_trimestre or 0):.2f}".replace(".", ","), op.status,
+            ])
+        return "\ufeff" + buffer.getvalue()
+
+    @staticmethod
+    def obter_por_identificador(identifier: str, is_admin: bool = True) -> Dict[str, Any]:
         clean = only_digits(identifier) or identifier.strip()
         row = OperadoraRepository.find_by_identifier(clean)
-        if not row:
+        if not row or (not is_admin and row.get("status") == "Inativa"):
             raise BusinessRuleError("Operadora não encontrada.", 404)
         return Operadora.from_row(row).to_dict()
+
+    @staticmethod
+    def alterar_status(identifier: str, status: str) -> Dict[str, Any]:
+        if status not in STATUS_VALIDOS:
+            raise BusinessRuleError(f"Status inválido. Use: {', '.join(STATUS_VALIDOS)}.", 400)
+        clean = only_digits(identifier) or identifier.strip()
+        existing = OperadoraRepository.find_by_identifier(clean)
+        if not existing:
+            raise BusinessRuleError("Operadora não encontrada.", 404)
+        from datetime import date
+
+        campos: Dict[str, Any] = {"status": status}
+        campos["data_descredenciamento"] = date.today() if status == "Inativa" else None
+        updated = OperadoraRepository.update(str(existing["registro_ans"]), campos)
+        verbo = "inativada" if status == "Inativa" else ("reativada" if status == "Ativa" else "colocada em análise")
+        return {"mensagem": f"Operadora {verbo} com sucesso.", "data": Operadora.from_row(updated).to_dict()}
 
     @staticmethod
     def _sanitize_payload(data: Dict[str, Any], is_create: bool = True) -> Dict[str, Any]:
@@ -62,6 +121,15 @@ class OperadoraService:
             payload["email"] = None
         elif "email" in data:
             payload["email"] = None
+
+        if "beneficiarios" in data:
+            try:
+                benef = int(data.get("beneficiarios") or 0)
+            except (TypeError, ValueError):
+                raise BusinessRuleError("Beneficiários deve ser um número inteiro.", 400)
+            if benef < 0:
+                raise BusinessRuleError("Beneficiários não pode ser negativo.", 400)
+            payload["beneficiarios"] = benef
 
         optional_fields = [
             "nome_fantasia",

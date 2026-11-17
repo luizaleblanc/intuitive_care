@@ -8,6 +8,7 @@ CREATE DATABASE IF NOT EXISTS intuitive_care
   COLLATE utf8mb4_unicode_ci;
 
 USE intuitive_care;
+SET NAMES utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
