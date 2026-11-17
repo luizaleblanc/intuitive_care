@@ -4,8 +4,9 @@ import glob
 
 class DataProcessor:
     def __init__(self):
-        self.input_folder = "../data/raw"
-        self.output_file = "../data/consolidado_despesas.csv"
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.input_folder = os.path.join(base_dir, "data", "raw")
+        self.output_file = os.path.join(base_dir, "data", "consolidado_despesas.csv")
         self.colunas_finais = ['REG_ANS', 'Trimestre', 'Ano', 'Valor Despesas']
 
     def identificar_arquivos(self):

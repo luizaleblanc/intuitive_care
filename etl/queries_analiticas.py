@@ -40,7 +40,7 @@ SELECT
     ROUND(((v_fim.total_fim - v_ini.total_inicio) / v_ini.total_inicio) * 100, 2) as crescimento_pct
 FROM valores_fim v_fim
 JOIN valores_inicio v_ini ON v_fim.reg_ans = v_ini.reg_ans
-JOIN operadoras o ON v_fim.reg_ans = o.reg_ans
+JOIN operadoras o ON v_fim.reg_ans = o.registro_ans
 WHERE v_ini.total_inicio > 100000 
 ORDER BY crescimento_pct DESC
 LIMIT 5;
@@ -51,7 +51,7 @@ SELECT
     o.uf, 
     SUM(d.valor_despesa) as total_despesas
 FROM despesas d
-JOIN operadoras o ON d.reg_ans = o.reg_ans
+JOIN operadoras o ON d.reg_ans = o.registro_ans
 WHERE o.uf IS NOT NULL
 GROUP BY o.uf
 ORDER BY total_despesas DESC
