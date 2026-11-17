@@ -1,4 +1,7 @@
 import pandas as pd
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from texto import ler_csv_ans, normalizar_dataframe
 import os
 
 def enriquecer_dados():
@@ -31,10 +34,7 @@ def enriquecer_dados():
         }
         df_despesas.rename(columns=mapa_despesas, inplace=True)
         
-        try:
-            df_ops = pd.read_csv(arquivo_operadoras, sep=';', encoding='utf-8')
-        except UnicodeDecodeError:
-            df_ops = pd.read_csv(arquivo_operadoras, sep=';', encoding='latin1')
+        df_ops = normalizar_dataframe(ler_csv_ans(arquivo_operadoras, sep=';', dtype=str))
             
         print(f"Colunas originais em Operadoras: {list(df_ops.columns)}")
 
@@ -46,6 +46,8 @@ def enriquecer_dados():
             'CD_OPERADORA': 'reg_ans',
             'Razão Social': 'RazaoSocial',
             'Razao_Social': 'RazaoSocial',
+            'RAZAO_SOCIAL': 'RazaoSocial',
+            'MODALIDADE': 'Modalidade',
             'CNPJ': 'CNPJ',
             'UF': 'UF',
             'Modalidade': 'Modalidade'
