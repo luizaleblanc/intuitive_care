@@ -34,10 +34,15 @@ def validate_email(email: Optional[str]) -> str:
 
 def validate_password(password: Optional[str]) -> str:
     pwd = password or ""
-    if len(pwd) < 6:
-        raise BusinessRuleError("A senha deve conter no mínimo 6 caracteres.", 400)
-    if not re.search(r"[A-Za-z]", pwd) or not re.search(r"\d", pwd):
-        raise BusinessRuleError("A senha deve conter letras e números.", 400)
+    if (
+        len(pwd) < 8
+        or not re.search(r"[A-Z]", pwd)
+        or not re.search(r"\d", pwd)
+        or not re.search(r"[^A-Za-z0-9]", pwd)
+    ):
+        raise BusinessRuleError(
+            "A senha deve ter ao menos 8 caracteres, com letra maiúscula, número e símbolo.", 400
+        )
     return pwd
 
 

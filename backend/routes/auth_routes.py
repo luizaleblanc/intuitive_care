@@ -41,15 +41,15 @@ def logout():
     return jsonify(result), 200
 
 
-@auth_bp.route("/forgot-password", methods=["POST"])
-def forgot_password():
+@auth_bp.route("/esqueci-senha", methods=["POST"])
+def esqueci_senha():
     payload = get_json_body()
-    result = AuthService.forgot_password(payload)
+    result = AuthService.esqueci_senha(payload)
     return jsonify(result), 200
 
 
-@auth_bp.route("/reset-password", methods=["POST"])
-def reset_password():
+@auth_bp.route("/redefinir-senha", methods=["POST"])
+def redefinir_senha():
     payload = get_json_body()
-    result = AuthService.reset_password(payload)
+    result = AuthService.redefinir_senha(payload)
     return jsonify(result), 200

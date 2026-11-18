@@ -6,6 +6,7 @@ import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from threading import Thread
 from typing import Any, Dict
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -15,6 +16,14 @@ from backend.models.usuario_model import PREFERENCIAS_PADRAO, Usuario
 from backend.repositories.usuario_repository import UsuarioRepository
 from backend.services.email_service import EmailService
 from backend.services.validators import BusinessRuleError, validate_email, validate_password
+
+
+RESET_MAX_PEDIDOS = 3
+RESET_JANELA_MIN = 15
+
+
+def _agora() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -96,6 +105,9 @@ class AuthService:
 
         senha_hash = generate_password_hash(password, method="pbkdf2:sha256")
         user_row = UsuarioRepository.create_user(nome=nome, email=email, senha_hash=senha_hash, perfil="COLABORADOR")
+        cargo = (data.get("cargo") or "").strip()[:120]
+        if cargo:
+            user_row = UsuarioRepository.update_user_profile(user_row["id"], {"cargo": cargo}) or user_row
         user = Usuario.from_row(user_row)
 
         jti = uuid.uuid4().hex
@@ -213,66 +225,60 @@ class AuthService:
         }
 
     @staticmethod
-    def forgot_password(data: Dict[str, Any]) -> Dict[str, Any]:
+    def _enviar_reset(email: str, nome: str, link: str) -> None:
+        try:
+            EmailService.enviar_reset_senha(email, nome, link)
+        except Exception as exc:  # A resposta ao cliente não pode revelar falhas por conta.
+            print(f"[EMAIL][erro] Falha ao enviar redefinição de senha: {type(exc).__name__}", flush=True)
+
+    @classmethod
+    def esqueci_senha(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         email = validate_email(data.get("email"))
+        agora = _agora()
+        email_hash = hashlib.sha256(email.encode("utf-8")).hexdigest()
+        if not UsuarioRepository.registrar_pedido_reset(
+            email_hash, agora, agora - timedelta(minutes=RESET_JANELA_MIN), RESET_MAX_PEDIDOS
+        ):
+            raise BusinessRuleError("Muitas tentativas. Aguarde 15 minutos e tente novamente.", 429)
+
         user_row = UsuarioRepository.find_by_email(email)
+        if user_row and bool(user_row.get("ativo", 1)):
+            token = secrets.token_urlsafe(32)
+            UsuarioRepository.criar_token_reset(
+                user_row["id"],
+                hashlib.sha256(token.encode("ascii")).hexdigest(),
+                agora + timedelta(minutes=Config.RESET_TOKEN_EXPIRA_MIN),
+            )
+            link = f"{Config.FRONTEND_URL}/#/redefinir-senha?token={token}"
+            # Em segundo plano, para o tempo de resposta não denunciar contas existentes.
+            Thread(target=cls._enviar_reset, args=(user_row["email"], user_row["nome"], link), daemon=True).start()
 
-        if not user_row:
-            return {
-                "mensagem": "Se o e-mail estiver cadastrado, enviaremos um código de recuperação.",
-                "email_enviado": True,
-            }
-
-        code = f"{secrets.randbelow(900000) + 100000}"
-        code_hash = generate_password_hash(code, method="pbkdf2:sha256")
-        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=Config.RESET_CODE_EXPIRATION_MINUTES)
-        UsuarioRepository.create_password_reset(user_row["id"], code_hash, expires_at)
-
-        delivery = EmailService.send_password_recovery_email(
-            to_email=user_row["email"],
-            user_name=user_row["nome"],
-            recovery_code=code,
-        )
-
-        response: Dict[str, Any] = {
-            "mensagem": "Código de recuperação enviado para o e-mail informado.",
-            "email_enviado": bool(delivery.get("delivered")),
-            "provedor_email": delivery.get("provider"),
-            "validade_minutos": Config.RESET_CODE_EXPIRATION_MINUTES,
-        }
-        if delivery.get("preview_code"):
-            response["codigo_demonstracao"] = delivery["preview_code"]
-        return response
+        return {"mensagem": "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."}
 
     @staticmethod
-    def reset_password(data: Dict[str, Any]) -> Dict[str, Any]:
-        email = validate_email(data.get("email"))
-        code = (data.get("codigo") or data.get("code") or "").strip()
-        new_password = validate_password(data.get("nova_senha") or data.get("new_password"))
+    def redefinir_senha(data: Dict[str, Any]) -> Dict[str, Any]:
+        token = (data.get("token") or "").strip()
+        nova_senha = validate_password(data.get("nova_senha"))
+        registro = (
+            UsuarioRepository.buscar_token_reset(hashlib.sha256(token.encode("utf-8")).hexdigest())
+            if token
+            else None
+        )
+        if not registro:
+            raise BusinessRuleError("Link de redefinição inválido.", 400)
+        if registro.get("usado_em"):
+            raise BusinessRuleError("Este link já foi utilizado. Solicite um novo.", 400)
 
-        if not code:
-            raise BusinessRuleError("Informe o código de recuperação enviado por e-mail.", 400)
-
-        user_row = UsuarioRepository.find_by_email(email)
-        if not user_row:
-            raise BusinessRuleError("Código de recuperação inválido ou expirado.", 400)
-
-        reset_row = UsuarioRepository.find_latest_active_reset(user_row["id"])
-        if not reset_row:
-            raise BusinessRuleError("Nenhuma solicitação de recuperação ativa encontrada.", 400)
-
-        expira_em = reset_row["expira_em"]
+        agora = _agora()
+        expira_em = registro["expira_em"]
         if isinstance(expira_em, str):
             expira_em = datetime.fromisoformat(expira_em)
-        if expira_em < datetime.now(timezone.utc).replace(tzinfo=None):
-            raise BusinessRuleError("O código de recuperação expirou. Solicite um novo código.", 400)
+        if expira_em < agora:
+            raise BusinessRuleError("Este link expirou. Solicite um novo.", 400)
+        if not UsuarioRepository.consumir_token_reset(registro["id"], agora):
+            raise BusinessRuleError("Este link já foi utilizado. Solicite um novo.", 400)
 
-        if not check_password_hash(reset_row["codigo_hash"], code):
-            raise BusinessRuleError("Código de recuperação incorreto.", 400)
-
-        new_hash = generate_password_hash(new_password, method="pbkdf2:sha256")
-        UsuarioRepository.update_password(user_row["id"], new_hash)
-        UsuarioRepository.mark_reset_used(reset_row["id"])
-        UsuarioRepository.revoke_all_user_sessions(user_row["id"])
-
+        usuario_id = registro["usuario_id"]
+        UsuarioRepository.update_password(usuario_id, generate_password_hash(nova_senha, method="pbkdf2:sha256"))
+        UsuarioRepository.revoke_all_user_sessions(usuario_id)
         return {"mensagem": "Senha redefinida com sucesso. Faça login com a nova senha."}

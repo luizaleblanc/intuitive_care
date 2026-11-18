@@ -126,6 +126,24 @@ SQLITE_SCHEMA_STATEMENTS = [
         PRIMARY KEY (ano, trimestre)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS tokens_reset_senha (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expira_em TIMESTAMP NOT NULL,
+        usado_em TIMESTAMP,
+        criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS pedidos_reset_senha (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email_hash TEXT NOT NULL,
+        criado_em TIMESTAMP NOT NULL
+    )
+    """,
 ]
 
 MYSQL_SCHEMA_STATEMENTS = [
@@ -263,6 +281,27 @@ MYSQL_SCHEMA_STATEMENTS = [
         auditado_por VARCHAR(120),
         auditado_em DATETIME,
         PRIMARY KEY (ano, trimestre)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tokens_reset_senha (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        token_hash CHAR(64) NOT NULL UNIQUE,
+        expira_em DATETIME NOT NULL,
+        usado_em DATETIME NULL,
+        criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_token_reset_usuario
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+            ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS pedidos_reset_senha (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email_hash CHAR(64) NOT NULL,
+        criado_em DATETIME NOT NULL,
+        INDEX idx_pedidos_reset (email_hash, criado_em)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
 ]

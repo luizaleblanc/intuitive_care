@@ -5,9 +5,15 @@ os.environ["APP_ENV"] = "test"
 os.environ["DB_ENGINE"] = "sqlite"
 os.environ["SQLITE_PATH"] = ":memory:"
 
+from datetime import datetime
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from sqlalchemy import text
+
 from backend.app import create_app
 from backend.config import Config
-from backend.database.connection import reset_engine
+from backend.database.connection import get_connection, reset_engine
 from backend.database.init_db import initialize_database
 
 
@@ -49,7 +55,7 @@ class IntuitiveCareApiTestCase(unittest.TestCase):
             json={
                 "nome": "Maria Silva",
                 "email": "maria@uninassau.edu.br",
-                "senha": "Teste123",
+                "senha": "Teste@123",
             },
         )
         self.assertEqual(reg_res.status_code, 201)
@@ -64,7 +70,7 @@ class IntuitiveCareApiTestCase(unittest.TestCase):
             json={
                 "nome": "Maria 2",
                 "email": "maria@uninassau.edu.br",
-                "senha": "Teste123",
+                "senha": "Teste@123",
             },
         )
         self.assertEqual(dup_res.status_code, 409)
@@ -93,51 +99,71 @@ class IntuitiveCareApiTestCase(unittest.TestCase):
         after_logout = self.client.get("/api/auth/me", headers=self._auth_headers(token))
         self.assertEqual(after_logout.status_code, 401)
 
-    def test_password_recovery_flow(self):
-        forgot_res = self.client.post(
-            "/api/auth/forgot-password",
-            json={"email": "admin@intuitivecare.com.br"},
-        )
-        self.assertEqual(forgot_res.status_code, 200)
-        forgot_data = forgot_res.get_json()
-        self.assertTrue(forgot_data["email_enviado"])
-        code = forgot_data.get("codigo_demonstracao")
-        self.assertIsNotNone(code)
+    def _pedir_reset(self, email="admin@intuitivecare.com.br"):
+        """Pede o reset capturando o link, com o envio executado na mesma thread."""
+        enviados = []
+        thread = lambda target, args, daemon: SimpleNamespace(start=lambda: target(*args))
+        with patch("backend.services.auth_service.Thread", thread), patch(
+            "backend.services.auth_service.EmailService.enviar_reset_senha",
+            side_effect=lambda para, nome, link: enviados.append(link),
+        ):
+            res = self.client.post("/api/auth/esqueci-senha", json={"email": email})
+        token = enviados[0].split("token=")[1] if enviados else None
+        return res, token
 
-        # Redefinição com código incorreto falha
-        bad_reset = self.client.post(
-            "/api/auth/reset-password",
-            json={
-                "email": "admin@intuitivecare.com.br",
-                "codigo": "000000",
-                "nova_senha": "NovaSenha123",
-            },
-        )
-        self.assertEqual(bad_reset.status_code, 400)
+    def _redefinir(self, token, senha="NovaSenha@123"):
+        return self.client.post("/api/auth/redefinir-senha", json={"token": token, "nova_senha": senha})
 
-        # Redefinição com código correto funciona
-        ok_reset = self.client.post(
-            "/api/auth/reset-password",
-            json={
-                "email": "admin@intuitivecare.com.br",
-                "codigo": code,
-                "nova_senha": "NovaSenha123",
-            },
-        )
-        self.assertEqual(ok_reset.status_code, 200)
+    def test_reset_senha_fluxo_completo(self):
+        sessao = self._login_demo()
+        res, token = self._pedir_reset()
+        self.assertEqual(res.status_code, 200)
+        self.assertNotIn("token", res.get_json())
 
-        # Senha antiga falha, senha nova autentica
-        old_login = self.client.post(
-            "/api/auth/login",
-            json={"email": "admin@intuitivecare.com.br", "senha": "Admin@2025"},
-        )
-        self.assertEqual(old_login.status_code, 401)
+        self.assertEqual(self._redefinir("invalido").status_code, 400)
+        self.assertEqual(self._redefinir(token, "fraca").status_code, 400)
+        self.assertEqual(self._redefinir(token).status_code, 200)
 
-        new_login = self.client.post(
-            "/api/auth/login",
-            json={"email": "admin@intuitivecare.com.br", "senha": "NovaSenha123"},
-        )
-        self.assertEqual(new_login.status_code, 200)
+        reuso = self._redefinir(token, "OutraSenha@123")
+        self.assertEqual(reuso.status_code, 400)
+        self.assertIn("utilizado", reuso.get_json()["erro"])
+
+        self.assertEqual(self.client.get("/api/auth/me", headers=self._auth_headers(sessao)).status_code, 401)
+        antiga = {"email": "admin@intuitivecare.com.br", "senha": "Admin@2025"}
+        self.assertEqual(self.client.post("/api/auth/login", json=antiga).status_code, 401)
+        nova = self.client.post("/api/auth/login", json={**antiga, "senha": "NovaSenha@123"})
+        self.assertEqual(nova.status_code, 200)
+        self.assertEqual(nova.get_json()["usuario"]["perfil"], "ADMIN")
+
+    def test_reset_senha_nao_revela_email(self):
+        existente, token = self._pedir_reset()
+        inexistente, sem_token = self._pedir_reset("ninguem@intuitivecare.com.br")
+        self.assertEqual(existente.status_code, inexistente.status_code)
+        self.assertEqual(existente.get_json(), inexistente.get_json())
+        self.assertIsNotNone(token)
+        self.assertIsNone(sem_token)
+
+    def test_reset_senha_link_expirado_e_substituido(self):
+        _, primeiro = self._pedir_reset()
+        _, segundo = self._pedir_reset()
+        self.assertIn("inválido", self._redefinir(primeiro).get_json()["erro"])
+        with get_connection() as conn:
+            conn.execute(text("UPDATE tokens_reset_senha SET expira_em = :e"), {"e": datetime(2020, 1, 1)})
+        self.assertIn("expirou", self._redefinir(segundo).get_json()["erro"])
+
+    def test_reset_senha_limite_de_pedidos(self):
+        for email in ("admin@intuitivecare.com.br", "ninguem@intuitivecare.com.br"):
+            for _ in range(3):
+                self.assertEqual(self._pedir_reset(email)[0].status_code, 200)
+            self.assertEqual(self._pedir_reset(email)[0].status_code, 429)
+
+    def test_cadastro_grava_cargo_e_exige_senha_forte(self):
+        dados = {"nome": "Ana Souza", "email": "ana@intuitivecare.com.br", "cargo": "Analista"}
+        self.assertEqual(self.client.post("/api/auth/register", json={**dados, "senha": "Teste123"}).status_code, 400)
+        res = self.client.post("/api/auth/register", json={**dados, "senha": "Teste@123"})
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.get_json()["usuario"]["cargo"], "Analista")
+        self.assertEqual(res.get_json()["usuario"]["perfil"], "COLABORADOR")
 
     def test_operadoras_crud_and_business_rules(self):
         # Rota protegida sem token -> 401

@@ -38,17 +38,18 @@ class Config:
     # Segurança e Tokens de Sessão
     SECRET_KEY = os.getenv("SECRET_KEY", "intuitive-care-uninassau-secret-key-2026")
     TOKEN_EXPIRATION_HOURS = int(os.getenv("TOKEN_EXPIRATION_HOURS", "12"))
-    RESET_CODE_EXPIRATION_MINUTES = int(os.getenv("RESET_CODE_EXPIRATION_MINUTES", "15"))
+    RESET_TOKEN_EXPIRA_MIN = int(os.getenv("RESET_TOKEN_EXPIRA_MIN", "30"))
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8080").rstrip("/")
 
-    # Serviço de E-mail via API externa (Resend / Brevo) ou SMTP
-    EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "mock")  # mock | resend | brevo | smtp
-    EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@intuitivecare.local")
+    # E-mail: smtp (Mailpit em desenvolvimento) | console | resend | brevo
+    MAIL_MODO = os.getenv("MAIL_MODO", "console")
+    MAIL_HOST = os.getenv("MAIL_HOST", "localhost")
+    MAIL_PORT = int(os.getenv("MAIL_PORT", "1025"))
+    MAIL_USER = os.getenv("MAIL_USER", "")
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
+    MAIL_FROM = os.getenv("MAIL_FROM", "no-reply@intuitivecare.com.br")
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
     BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
-    SMTP_HOST = os.getenv("SMTP_HOST", "")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USER = os.getenv("SMTP_USER", "")
-    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
     @classmethod
     def get_database_url(cls) -> str:

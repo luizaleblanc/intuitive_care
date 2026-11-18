@@ -17,10 +17,12 @@ services:
       - DB_USER=root
       # DB_PASSWORD vem do .env da raiz (montado em /app), para acompanhar a senha real do MySQL.
       - DB_NAME=intuitive_care
-      - EMAIL_PROVIDER=mock
+      # MAIL_* e FRONTEND_URL vêm do .env da raiz.
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     command: python -m backend.app
 
   db:
@@ -39,6 +41,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Captura os e-mails de desenvolvimento: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "8025:8025"
 
 volumes:
   mysql_data:

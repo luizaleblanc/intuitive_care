@@ -137,41 +137,53 @@ class UsuarioRepository:
             )
 
     @staticmethod
-    def create_password_reset(usuario_id: int, codigo_hash: str, expira_em: datetime) -> None:
+    def registrar_pedido_reset(email_hash: str, agora: datetime, limite_desde: datetime, maximo: int) -> bool:
+        """Conta o pedido por e-mail (cadastrado ou não); retorna False se passou do limite."""
+        with get_connection() as conn:
+            conn.execute(text("DELETE FROM pedidos_reset_senha WHERE criado_em < :d"), {"d": limite_desde})
+            total = conn.execute(
+                text("SELECT COUNT(*) FROM pedidos_reset_senha WHERE email_hash = :h"), {"h": email_hash}
+            ).scalar()
+            if int(total or 0) >= maximo:
+                return False
+            conn.execute(
+                text("INSERT INTO pedidos_reset_senha (email_hash, criado_em) VALUES (:h, :c)"),
+                {"h": email_hash, "c": agora},
+            )
+            return True
+
+    @staticmethod
+    def criar_token_reset(usuario_id: int, token_hash: str, expira_em: datetime) -> None:
+        """Cria o token e descarta os pendentes: só o link mais recente vale."""
         with get_connection() as conn:
             conn.execute(
-                text("UPDATE recuperacao_senha SET utilizado = 1 WHERE usuario_id = :usuario_id AND utilizado = 0"),
-                {"usuario_id": usuario_id},
+                text("DELETE FROM tokens_reset_senha WHERE usuario_id = :u AND usado_em IS NULL"),
+                {"u": usuario_id},
             )
             conn.execute(
                 text(
-                    "INSERT INTO recuperacao_senha (usuario_id, codigo_hash, expira_em, utilizado) "
-                    "VALUES (:usuario_id, :codigo_hash, :expira_em, 0)"
+                    "INSERT INTO tokens_reset_senha (usuario_id, token_hash, expira_em) "
+                    "VALUES (:u, :h, :e)"
                 ),
-                {"usuario_id": usuario_id, "codigo_hash": codigo_hash, "expira_em": expira_em},
+                {"u": usuario_id, "h": token_hash, "e": expira_em},
             )
 
     @staticmethod
-    def find_latest_active_reset(usuario_id: int) -> Optional[Dict[str, Any]]:
+    def buscar_token_reset(token_hash: str) -> Optional[Dict[str, Any]]:
         with get_connection() as conn:
             row = (
-                conn.execute(
-                    text(
-                        "SELECT * FROM recuperacao_senha "
-                        "WHERE usuario_id = :usuario_id AND utilizado = 0 "
-                        "ORDER BY id DESC LIMIT 1"
-                    ),
-                    {"usuario_id": usuario_id},
-                )
+                conn.execute(text("SELECT * FROM tokens_reset_senha WHERE token_hash = :h"), {"h": token_hash})
                 .mappings()
                 .first()
             )
             return dict(row) if row else None
 
     @staticmethod
-    def mark_reset_used(reset_id: int) -> None:
+    def consumir_token_reset(token_id: int, agora: datetime) -> bool:
+        """Marca o uso de forma atômica; em pedidos simultâneos, só um vence."""
         with get_connection() as conn:
-            conn.execute(
-                text("UPDATE recuperacao_senha SET utilizado = 1 WHERE id = :id"),
-                {"id": reset_id},
+            res = conn.execute(
+                text("UPDATE tokens_reset_senha SET usado_em = :a WHERE id = :i AND usado_em IS NULL"),
+                {"a": agora, "i": token_id},
             )
+            return res.rowcount == 1
