@@ -1,6 +1,6 @@
-# Intuitive Care — Plataforma Mobile de Análise e Gestão ANS
+# Intuitive Care — Plataforma de Análise e Gestão de Dados da ANS
 
-Sistema computacional completo composto por **Aplicativo Mobile em Flutter (Arquitetura MVVM + Provider)**, **API REST em Python + Flask (Arquitetura em Camadas)**, **Pipeline ETL em Python (Reaproveitada)** e **Banco de Dados Relacional MySQL 8.0**.
+Sistema computacional completo composto por **Aplicativo Flutter (Arquitetura MVVM + Provider, web desktop e mobile)**, **API REST em Python + Flask (Arquitetura em Camadas)**, **Pipeline ETL em Python com dados reais da ANS** e **Banco de Dados Relacional MySQL 8.0**.
 
 Projeto desenvolvido e migrado para atender rigorosamente às diretrizes da **2ª Avaliação** das disciplinas de **Códigos de Alta Performance (Mobile)** e **Backend Frameworks** — Curso de Graduação em Ciências da Computação (UNINASSAU João Pessoa).
 
@@ -13,12 +13,132 @@ A tabela abaixo compara o estado **antigo (legado)** do projeto com o que está 
 | Funcionalidade / Camada | Como era no Projeto Antigo (Antes) | Como está no Projeto Atual (Agora) |
 | :--- | :--- | :--- |
 | **Autenticação & Controle de Sessão** | ❌ **Inexistente no projeto original** (não havia login, senhas nem usuários; rotas eram abertas). | ✅ **100% Implementado e Ativo:**<br>• Cadastro (`POST /api/auth/register`) com senha criptografada em hash seguro.<br>• Login (`POST /api/auth/login`) com validação no backend e emissão de JWT.<br>• Identificação do usuário logado via JSON (`GET /api/auth/me`).<br>• Atualização de perfil (`PUT /api/auth/me`): nome, e-mail, cargo, telefone, data de nascimento, foto (JPG/PNG até 2 MB) e preferências.<br>• Logoff com revogação no banco (`POST /api/auth/logout` invalida a sessão em `sessoes_tokens`).<br>• Recuperação de senha por e-mail via API (`POST /api/auth/forgot-password` e `POST /api/auth/reset-password`). |
-| **Perfis de Acesso** | ❌ Inexistentes. | ✅ **ADMIN** (leitura + escrita) e **CONSUMIDOR** (somente leitura). Toda rota de escrita exige ADMIN (`HTTP 403` para o Consumidor), e operadoras inativas só aparecem para o Administrador. |
+| **Perfis de Acesso** | ❌ Inexistentes. | ✅ **ADMIN** (leitura + escrita + exportação) e **COLABORADOR** (somente leitura + exportação). Toda rota de escrita exige ADMIN (`HTTP 403` para o Colaborador), e operadoras inativas só aparecem para o Administrador. Veja [Perfis de acesso](#perfis-de-acesso). |
 | **Frontend** | ❌ Aplicação Web legada em Vue.js 3 + Tailwind CSS (`web-app/` e `frontend/index.html`). | ✅ **100% Migrado para Flutter** (`frontend/`, foco em web desktop) em **MVVM** (`models`, `views`, `viewmodels`, `services`, `repositories`) com **Provider** e rotas via **go_router**. Visual fiel ao **Design System Intuitive Care** (`frontend/web/design-system.html`): Página inicial, Login, Painel Geral, Operadoras ANS, Despesas Contábeis e Configurações de Perfil. |
 | **Arquitetura do Backend** | ❌ Script monolítico em arquivo único `api/main_api.py` com apenas 4 endpoints `GET`. | ✅ **100% Reestruturado em Camadas** (`backend/`): separação clara em **Rotas (`routes/`)**, **Regras de Negócio e Validações (`services/`)**, **Persistência (`repositories/`)**, **Modelos (`models/`)** e **Banco (`database/`)**. |
 | **Operações HTTP & CRUD** | ❌ Somente leitura (`GET`). | ✅ **CRUD Completo (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`)** em `operadoras`, `despesas` e no perfil de `usuarios`, mais endpoints analíticos (painel, plano de contas, auditoria de lotes e exportação CSV). |
 | **Regras de Negócio** | ❌ Quase inexistentes (lógicas soltas na interface). | ✅ **Centralizadas e validadas no Backend**: dígito verificador do CNPJ (módulo 11), validação das 27 UFs, unicidade cadastral, bloqueio de integridade referencial ao excluir operadora com despesas (`HTTP 409`), status da operadora (Ativa / Em análise / Inativa), sinistralidade, ticket médio por vida e variação entre trimestres. |
 | **Banco de Dados & ETL** | ❌ Carga ETL sobrescrevia tabelas apagando chaves (`if_exists='replace'`); sem backup SQL; dados de exemplo. | ✅ **Schema relacional com integridade e FKs** (`backend/database/schema.sql`, com migração automática em `init_db.py`), backup demonstrativo (`backend/database/backup_intuitive_care.sql`) e **pipeline ETL com dados reais da ANS**: demonstrações contábeis trimestrais (contas 31, 41, 43 e 46), operadoras ativas e canceladas e beneficiários por operadora. A carga é idempotente e corrige textos com acentuação quebrada. |
+
+---
+
+## Arquitetura
+
+### Visão geral
+
+```mermaid
+flowchart LR
+    ANS[(Dados abertos ANS<br/>dadosabertos.ans.gov.br)] -->|scraping.py| RAW[data/raw/*.csv]
+    RAW -->|processamento.py<br/>enriquecimento.py| CSV[data/*.csv]
+    CSV -->|importar_sql.py| DB[(MySQL 8.0<br/>porta 3308)]
+    DB <-->|SQLAlchemy| API[API REST Flask<br/>porta 5000]
+    API <-->|JSON + JWT| APP[App Flutter<br/>MVVM + Provider]
+```
+
+O banco de dados é a **fonte da verdade**: todos os números exibidos no app (KPIs, gráficos, ranking, plano de contas, status e beneficiários) vêm do MySQL pela API. Nenhum valor fica fixo no código.
+
+### Frontend em MVVM
+
+Cada camada só conversa com a vizinha. As telas (Views) não fazem requisições HTTP: elas observam um ViewModel, que pede os dados a um Repository, que usa um Service para falar com a API.
+
+```mermaid
+flowchart LR
+    V[View<br/>widgets e telas] -->|ações do usuário| VM[ViewModel<br/>ChangeNotifier]
+    VM -->|notifyListeners| V
+    VM --> R[Repository<br/>converte JSON em Model]
+    R --> S[Service<br/>chamadas HTTP]
+    S --> C[ApiClient<br/>JSON + Bearer token]
+    C --> API[(API Flask)]
+    R -.-> M[Model<br/>objetos de domínio]
+```
+
+| Camada | Pasta | Responsabilidade | Exemplos |
+| :--- | :--- | :--- | :--- |
+| **Model** | `lib/models/` | Objetos de domínio imutáveis, com `fromJson`/`toJson` | `UserModel`, `PreferenciasModel`, `OperadoraModel`, `PainelModel`, `ContasModel` |
+| **View** | `lib/views/` | Telas e layout. Leem o estado com `context.watch` e disparam ações no ViewModel | `HomeView`, `LoginView`, `AppShell`, `PainelView`, `OperadorasView`, `DespesasView`, `PerfilView` |
+| **ViewModel** | `lib/viewmodels/` | Estado da tela, filtros, carregamento e erros. Avisa a View com `notifyListeners()` | `AuthViewModel`, `PainelViewModel`, `OperadorasViewModel`, `ContasViewModel` |
+| **Repository** | `lib/repositories/` | Ponte entre ViewModel e Service: converte respostas em Models | `AuthRepository`, `OperadoraRepository`, `AnaliticoRepository` |
+| **Service** | `lib/services/` | Chamadas HTTP de cada recurso da API e cliente JSON centralizado | `ApiClient`, `AuthService`, `OperadoraService`, `AnaliticoService` |
+| **Design System** | `lib/shared/` + `lib/app/theme.dart` | Componentes, gráficos, marca, formatação e exportação reutilizados por todas as telas | `AppButton`, `KpiCard`, `PillBarChart`, `Donut`, `Mark`, `Exporter` |
+
+Fluxo de exemplo (filtrar o Painel por UF):
+
+1. O usuário escolhe "SP" no filtro da `PainelView`.
+2. A View chama `PainelViewModel.carregar(uf: 'SP')`.
+3. O ViewModel marca `isLoading`, chama `AnaliticoRepository.painel(...)`, que chama `AnaliticoService.fetchPainel(...)` (`GET /api/painel?uf=SP`).
+4. A resposta vira um `PainelModel`, o ViewModel guarda o resultado e chama `notifyListeners()`.
+5. A View é reconstruída com os novos KPIs, ranking e gráfico.
+
+### Backend em camadas
+
+| Camada | Pasta | Responsabilidade |
+| :--- | :--- | :--- |
+| Rotas | `backend/routes/` | Blueprints REST, leitura de parâmetros e middlewares `@token_required` e `@admin_required` |
+| Serviços | `backend/services/` | Regras de negócio e validações (CNPJ, UF, perfis, indicadores, e-mail) |
+| Repositórios | `backend/repositories/` | SQL parametrizado (proteção contra SQL injection) |
+| Modelos | `backend/models/` | Objetos de domínio e serialização JSON |
+| Banco | `backend/database/` | Conexão, schema, migração automática e contas de demonstração |
+
+---
+
+## Perfis de Acesso
+
+| Ação na plataforma | O que acontece no banco | Admin | Colaborador |
+| :--- | :--- | :---: | :---: |
+| Ver painel, operadoras e despesas | Leitura (`SELECT`) | ✅ | ✅ |
+| Filtrar por UF, ano, trimestre e modalidade | Leitura (`SELECT`) | ✅ | ✅ |
+| Exportar CSV (e PDF/XLSX conforme a preferência do perfil) | Leitura (`SELECT`) | ✅ | ✅ |
+| Ver operadoras inativas | Leitura (`SELECT`) | ✅ | ❌ |
+| Cadastrar nova operadora | Cria registro (`INSERT`) | ✅ | ❌ |
+| Editar dados de uma operadora | Atualiza o registro (`UPDATE`) | ✅ | ❌ |
+| Inativar ou reativar operadora | Altera o status (`UPDATE`) | ✅ | ❌ |
+| Auditar lote de demonstrações contábeis | Marca o lote como auditado (`UPDATE`) | ✅ | ❌ |
+| Editar o próprio perfil (dados, foto e preferências) | Atualiza só o próprio usuário | ✅ | ✅ |
+
+- **Na tela:** ações de escrita **não aparecem** para o Colaborador (não ficam só desabilitadas). O Admin vê "Gerenciar", "Nova operadora", "Inativar/Reativar" e "Auditar lote"; o Colaborador vê "Detalhes", o aviso "Modo consulta · somente leitura" e "Exportar ficha (PDF)".
+- **Na API:** as rotas de escrita usam `@admin_required` e devolvem `HTTP 403` para o Colaborador, mesmo que alguém chame a rota direto.
+- **No banco:** coluna `perfil` da tabela `usuarios` (`ADMIN` ou `COLABORADOR`). Novos cadastros entram como `COLABORADOR`.
+- **Selo do perfil:** `ADMIN` em Forest e `COLABORADOR` em Sage, na Topbar e na tela de Perfil.
+
+### Contas de demonstração
+
+Criadas automaticamente pela API na inicialização (`backend/database/init_db.py`). Na tela de login, em modo de desenvolvimento, o bloco "Acessos de demonstração" preenche os campos com um clique.
+
+| Perfil | E-mail | Senha |
+| :--- | :--- | :--- |
+| Administrador | `admin@intuitivecare.com.br` | `Admin@2025` |
+| Colaborador | `colaborador@intuitivecare.com.br` | `Colaborador@2025` |
+
+---
+
+## Telas do Aplicativo
+
+| Rota | Tela | Acesso | O que mostra |
+| :--- | :--- | :--- | :--- |
+| `/` | Página inicial | Público | Logo em destaque, proposta de valor, benefícios e botão "Design System" |
+| `/login` | Login | Público | Painel Forest (desktop) + formulário com validação, mostrar/ocultar senha e erros com `role="alert"` |
+| `/painel` | Painel Geral | Autenticado | **Admin:** total de despesas, registros extraídos, operadoras ativas, evolução em 8 trimestres e distribuição por modalidade. **Colaborador:** filtros (UF, Ano, Trimestre, Modalidade), despesas médico-hospitalares, sinistralidade, beneficiários, ticket médio, ranking e série |
+| `/operadoras` | Operadoras ANS | Autenticado | Resumo (ativas, em análise, inativadas, beneficiários), busca, filtro, tabela paginada e gaveta de detalhes/edição |
+| `/despesas` | Despesas Contábeis | Autenticado | Contas 41, 46 e 43 com variação, plano de contas com comparativo, composição médico-hospitalar, destaques e auditoria de lote |
+| `/perfil` | Configurações de Perfil | Autenticado | Foto com prévia, dados pessoais, preferências (idioma, data, exportação, UF e trimestre padrão, tema, avisos) e encerrar sessão com confirmação |
+
+---
+
+## Critérios de Aceite do MVP
+
+| # | Critério | Status | Como foi verificado |
+| :---: | :--- | :---: | :--- |
+| 1 | Página inicial sem números, com logo em destaque e botão "Design System" no canto superior direito | ✅ | `HomeView` + teste `responsivo_test.dart` |
+| 2 | Login autentica e redireciona para `/painel`; erros exibidos corretamente | ✅ | `LoginView` + `viewmodels_test.dart` + teste manual no navegador |
+| 3 | Sidebar só com MENU e CONTA; sem Engenharia, sem widget de API, sem sino | ✅ | `AppShell` |
+| 4 | Admin vê e usa: Nova operadora, Gerenciar/Editar, Inativar/Reativar, Auditar lote | ✅ | `OperadorasView`, `DespesasView` + `test_painel_contas_e_auditoria` |
+| 5 | Colaborador **não vê** nenhuma ação de escrita e não vê operadoras inativas | ✅ | Telas + `test_colaborador_somente_leitura` e `test_inativas_visiveis_somente_para_admin` |
+| 6 | Filtros de período sempre em dois campos (Ano + Trimestre), sem "4T25" em nenhum lugar | ✅ | `fmtPeriodo`/`fmtPeriodoCurto` + `models_test.dart` + busca no código |
+| 7 | Busca de operadoras por Registro ANS, razão social, nome fantasia e CNPJ (com ou sem máscara) | ✅ | `OperadoraRepository._filtros` + `test_busca_cnpj_com_mascara` |
+| 8 | Perfil: troca de foto com prévia, edição de dados, preferências e salvar com toast | ✅ | `PerfilView` + `test_perfil_preferencias_e_foto` |
+| 9 | "Encerrar sessão" pede confirmação e volta para `/login` | ✅ | `PerfilView` (confirmação em dois passos) |
+| 10 | Wordmark "intuitivecare" inteiro em `#113E32` em todos os fundos claros | ✅ | `LogoHorizontal` / `AppColors.forest` |
+| 11 | Página inicial e login sem rolagem horizontal em 360px | ✅ | `responsivo_test.dart` (falha se houver qualquer overflow em 360px e 1440px) |
 
 ---
 
@@ -62,7 +182,7 @@ intuitive_care/
 │   │   ├── viewmodels/                 # Auth, Painel, Operadoras e Contas
 │   │   ├── views/                      # Início, Login, AppShell, Painel, Operadoras, Despesas e Perfil
 │   │   └── shared/                     # Componentes do Design System (ui/), gráficos (charts/), marca (brand/) e utilitários (utils/)
-│   └── test/                           # Testes unitários de modelos, formatação e ViewModels
+│   └── test/                           # Testes de modelos, formatação, ViewModels e responsividade (360px/1440px)
 ├── docs/
 │   ├── PLANO_DE_ATAQUE.md              # Plano de ataque da migração e checklist acadêmico
 │   └── RELATORIO_TECNICO.md            # Relatório Técnico completo (Seção 4.3)
@@ -82,12 +202,12 @@ intuitive_care/
 
 ## Principais Endpoints da API REST (Flask)
 
-Todas as requisições e respostas utilizam **JSON**. Rotas protegidas exigem cabeçalho `Authorization: Bearer <token>`. Rotas marcadas com **(ADMIN)** devolvem `HTTP 403` para o perfil Consumidor.
+Todas as requisições e respostas utilizam **JSON**. Rotas protegidas exigem cabeçalho `Authorization: Bearer <token>`. Rotas marcadas com **(ADMIN)** devolvem `HTTP 403` para o perfil Colaborador.
 
 | Grupo | Método | Rota | Descrição |
 | :--- | :--- | :--- | :--- |
 | **Saúde** | `GET` | `/api/health` | Verifica status da API e conectividade com o SGBD |
-| **Auth** | `POST` | `/api/auth/register` | Cadastro de usuário (perfil CONSUMIDOR) com e-mail, nome e senha |
+| **Auth** | `POST` | `/api/auth/register` | Cadastro de usuário (perfil COLABORADOR) com e-mail, nome e senha |
 | **Auth** | `POST` | `/api/auth/login` | Autenticação por e-mail/senha e emissão de JWT |
 | **Auth** | `GET` | `/api/auth/me` | Retorna dados, perfil e preferências do usuário autenticado |
 | **Auth** | `PUT` | `/api/auth/me` | Atualiza nome, e-mail, cargo, telefone, nascimento, foto e preferências |
@@ -99,7 +219,7 @@ Todas as requisições e respostas utilizam **JSON**. Rotas protegidas exigem ca
 | **Contas** | `POST` | `/api/contas/lotes/<ano>/<trimestre>/auditar` | Marca o lote do trimestre como auditado **(ADMIN)** |
 | **Operadoras** | `GET` | `/api/operadoras` | Lista paginada com busca (Registro ANS, razão social, nome fantasia ou CNPJ com/sem máscara) e filtros `uf`, `modalidade`, `status` |
 | **Operadoras** | `GET` | `/api/operadoras/resumo` | Ativas, em análise, inativadas em 12 meses, beneficiários, modalidades e UFs |
-| **Operadoras** | `GET` | `/api/operadoras/exportar.csv` | Exporta a lista filtrada em CSV |
+| **Operadoras** | `GET` | `/api/operadoras/exportar.csv` | Exporta a lista filtrada em CSV (Admin e Colaborador; inativas só para o Admin) |
 | **Operadoras** | `GET` | `/api/operadoras/<id>` | Detalha operadora por `registro_ans` ou `cnpj` |
 | **Operadoras** | `GET` | `/api/operadoras/<id>/despesas` | Lista despesas da operadora |
 | **Operadoras** | `POST` | `/api/operadoras` | Cadastra nova operadora (valida CNPJ e UF no backend) **(ADMIN)** |
@@ -150,7 +270,7 @@ docker-compose up --build -d
 | Perfil | E-mail | Senha |
 | :--- | :--- | :--- |
 | Administrador | `admin@intuitivecare.com.br` | `Admin@2025` |
-| Consumidor | `consumidor@intuitivecare.com.br` | `Consulta@2025` |
+| Colaborador | `colaborador@intuitivecare.com.br` | `Colaborador@2025` |
 
 ### 4. Executando o Backend Localmente (sem Docker)
 
