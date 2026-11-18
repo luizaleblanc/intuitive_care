@@ -336,6 +336,80 @@ O arquivo `dist/intuitive_care_backend_e_sql.zip` será gerado contendo o códig
 
 ---
 
+## Próximos Passos: Cadastro e Reset de Senha
+
+> Planejado para 18/11/2026. Antes de começar, corrija as linhas 17 e 18 do `.env`, senão o `docker-compose` não consegue ler o arquivo.
+
+### 1. Tela de cadastro (≈2h)
+- [ ] **Rota `/cadastro`** (`register_view.dart`), com o mesmo layout do login:
+  - Painel Forest `#113E32` a partir de 1024px.
+  - Fundo Surface `#F2F4F3`.
+  - Campos com `PillTextField`.
+  - Botão Mint `#4AD295`.
+  - Destaques Lime `#C8F169`.
+  - Textos Ink `#0F172A` / Muted `#64748B`.
+- [ ] **Campos:** nome, e-mail, cargo, senha, confirmar senha e aceite dos termos.
+  - Indicador de força da senha (`ProgressBar`).
+  - Validação igual à do backend.
+- [ ] **`AuthViewModel.register()`:** estados de carregamento e erro e toast de sucesso. Depois do cadastro, redireciona para o login com o e-mail já preenchido.
+- [ ] **Links:** "Criar conta" no login e "Começar agora" na home levam para `/cadastro`.
+- [ ] **Testes:**
+  - Incluir `/cadastro` no `responsivo_test.dart`, em 360px e 1440px.
+  - Teste de ViewModel para e-mail duplicado (409).
+
+### 2. Reset de senha: backend (≈2h)
+- [ ] **Tabela `tokens_reset_senha`:** `usuario_id`, `token_hash`, `expira_em`, `usado_em`. Criada por migração idempotente.
+- [ ] **`POST /api/auth/esqueci-senha`:** sempre responde 200, para não revelar quais e-mails estão cadastrados.
+- [ ] **`POST /api/auth/redefinir-senha`:**
+  - O token vale para um único uso.
+  - Ao redefinir, todas as sessões em `sessoes_tokens` são invalidadas.
+- [ ] **Limite de tentativas:** até 3 pedidos por e-mail a cada 15 minutos.
+- [ ] **Mailpit no `docker-compose.yml`:** os e-mails ficam visíveis em http://localhost:8025.
+- [ ] **E-mail HTML com a paleta:** cabeçalho Forest e botão Mint.
+- [ ] **Novas variáveis no `.env` e no `.env.example`:**
+
+```env
+RESET_TOKEN_EXPIRA_MIN=30
+FRONTEND_URL=http://localhost:8080
+MAIL_MODO=smtp            # smtp | console (console imprime o link no log da API)
+MAIL_HOST=mailpit
+MAIL_PORT=1025
+MAIL_USER=
+MAIL_PASSWORD=
+MAIL_FROM=no-reply@intuitivecare.com.br
+```
+
+### 3. Reset de senha: frontend (≈1h30)
+- [ ] **Telas `/esqueci-senha` e `/redefinir-senha?token=...`**, no mesmo layout do cadastro.
+- [ ] **Link "Esqueci minha senha"** no login.
+- [ ] **Erros com `ErrorBox`:**
+  - Token expirado.
+  - Token já usado.
+  - Senhas não conferem.
+
+### 4. Roteiro de QA (≈1h)
+| # | Cenário | Esperado |
+|---|---|---|
+| 1 | Cadastro válido | Toast, redirecionamento ao login e perfil COLABORADOR |
+| 2 | E-mail já cadastrado | Erro inline sem perder o formulário |
+| 3 | Senha fraca ou confirmação diferente | Botão desabilitado e mensagem |
+| 4 | Cadastro em 360px | Sem rolagem horizontal |
+| 5 | Reset com e-mail existente | E-mail chega no Mailpit |
+| 6 | Reset com e-mail inexistente | Mesma resposta, nenhum e-mail enviado |
+| 7 | Link válido | Senha trocada e login com a senha nova |
+| 8 | Reusar o link | "Link já utilizado" |
+| 9 | Link expirado (`RESET_TOKEN_EXPIRA_MIN=1`) | "Link expirado" |
+| 10 | Sessão aberta antes do reset | Derrubada, pede login de novo |
+| 11 | 4 pedidos seguidos | O 4º é bloqueado pelo limite de tentativas |
+| 12 | Admin redefine a senha | Continua com perfil e acessos de ADMIN |
+
+### 5. Fechamento (≈30min)
+- [ ] **Testes:** rodar os testes do backend e do Flutter e o `flutter analyze`.
+- [ ] **README:** atualizar com o fluxo de cadastro e reset, as variáveis do `.env` e o Mailpit.
+- [ ] **Commits:** separar em backend, frontend e docs.
+
+---
+
 ## Documentação Complementar
 
 - [Plano de Ataque da Migração](docs/PLANO_DE_ATAQUE.md)
