@@ -36,7 +36,7 @@ class UsuarioRepository:
             return dict(row) if row else None
 
     @staticmethod
-    def create_user(nome: str, email: str, senha_hash: str, perfil: str = "CONSUMIDOR") -> Dict[str, Any]:
+    def create_user(nome: str, email: str, senha_hash: str, perfil: str = "COLABORADOR") -> Dict[str, Any]:
         with get_connection() as conn:
             result = conn.execute(
                 text(

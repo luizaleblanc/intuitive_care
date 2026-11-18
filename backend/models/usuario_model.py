@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
-PERFIS_VALIDOS = ("ADMIN", "CONSUMIDOR")
+PERFIS_VALIDOS = ("ADMIN", "COLABORADOR")
 
 PREFERENCIAS_PADRAO: Dict[str, Any] = {
     "idioma": "pt-BR",
@@ -32,7 +32,7 @@ class Usuario:
     id: Optional[int]
     nome: str
     email: str
-    perfil: str = "CONSUMIDOR"
+    perfil: str = "COLABORADOR"
     ativo: bool = True
     criado_em: Optional[Any] = None
     cargo: Optional[str] = None
@@ -55,12 +55,12 @@ class Usuario:
                 prefs.update(json.loads(bruto))
             except (TypeError, ValueError):
                 pass
-        perfil = row.get("perfil") or "CONSUMIDOR"
+        perfil = row.get("perfil") or "COLABORADOR"
         return cls(
             id=row.get("id"),
             nome=row["nome"],
             email=row["email"],
-            perfil=perfil if perfil in PERFIS_VALIDOS else "CONSUMIDOR",
+            perfil=perfil if perfil in PERFIS_VALIDOS else "COLABORADOR",
             ativo=bool(row.get("ativo", 1)),
             criado_em=row.get("criado_em"),
             cargo=row.get("cargo"),

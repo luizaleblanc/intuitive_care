@@ -13,7 +13,7 @@ SQLITE_SCHEMA_STATEMENTS = [
         nome TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         senha_hash TEXT NOT NULL,
-        perfil TEXT NOT NULL DEFAULT 'CONSUMIDOR',
+        perfil TEXT NOT NULL DEFAULT 'COLABORADOR',
         ativo INTEGER NOT NULL DEFAULT 1,
         criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -135,7 +135,7 @@ MYSQL_SCHEMA_STATEMENTS = [
         nome VARCHAR(120) NOT NULL,
         email VARCHAR(180) NOT NULL UNIQUE,
         senha_hash VARCHAR(255) NOT NULL,
-        perfil VARCHAR(30) NOT NULL DEFAULT 'CONSUMIDOR',
+        perfil VARCHAR(30) NOT NULL DEFAULT 'COLABORADOR',
         ativo TINYINT(1) NOT NULL DEFAULT 1,
         criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -295,10 +295,10 @@ USUARIOS_DEMONSTRACAO = [
         "cargo": "Analista de Dados ANS",
     },
     {
-        "nome": "Consulta Intuitive Care",
-        "email": "consumidor@intuitivecare.com.br",
-        "senha": "Consulta@2025",
-        "perfil": "CONSUMIDOR",
+        "nome": "Colaborador Intuitive Care",
+        "email": "colaborador@intuitivecare.com.br",
+        "senha": "Colaborador@2025",
+        "perfil": "COLABORADOR",
         "cargo": "Analista de Negócios",
     },
 ]
@@ -326,11 +326,19 @@ def migrar_schema(conn) -> None:
         for nome, tipo_mysql, tipo_sqlite in colunas:
             if nome not in existentes:
                 conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo_sqlite if sqlite else tipo_mysql}"))
-    # Perfil legado "ANALISTA" passa a ser "CONSUMIDOR" (somente leitura).
-    conn.execute(text("UPDATE usuarios SET perfil = 'CONSUMIDOR' WHERE perfil NOT IN ('ADMIN', 'CONSUMIDOR')"))
+    # Perfil legado "ANALISTA" passa a ser "COLABORADOR" (somente leitura).
+    conn.execute(text("UPDATE usuarios SET perfil = 'COLABORADOR' WHERE perfil NOT IN ('ADMIN', 'COLABORADOR')"))
 
 
 def garantir_usuarios_demonstracao(conn) -> None:
+    # Perfil "Consumidor" foi renomeado para "Colaborador": migra a conta de demonstração antiga.
+    antigo = conn.execute(text("SELECT id FROM usuarios WHERE LOWER(email) = 'consumidor@intuitivecare.com.br'")).first()
+    novo = conn.execute(text("SELECT id FROM usuarios WHERE LOWER(email) = 'colaborador@intuitivecare.com.br'")).first()
+    if antigo and not novo:
+        conn.execute(
+            text("UPDATE usuarios SET email = 'colaborador@intuitivecare.com.br', senha_hash = :h WHERE id = :id"),
+            {"h": generate_password_hash("Colaborador@2025", method="pbkdf2:sha256"), "id": antigo[0]},
+        )
     for u in USUARIOS_DEMONSTRACAO:
         row = conn.execute(
             text("SELECT id, senha_hash FROM usuarios WHERE LOWER(email) = :e"), {"e": u["email"]}

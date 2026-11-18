@@ -225,7 +225,7 @@ class DespesaRepository:
                     {
                         "ano": int(r["ano"]),
                         "trimestre": int(r["trimestre"]),
-                        "periodo": f"{r['ano']}-T{r['trimestre']}",
+                        "periodo": f"{r['trimestre']}º trimestre de {r['ano']}",
                         "total": float(r["total"]),
                     }
                     for r in serie_trimestral

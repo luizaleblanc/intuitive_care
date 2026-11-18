@@ -95,7 +95,7 @@ class AuthService:
             raise BusinessRuleError("Já existe um usuário cadastrado com este e-mail.", 409)
 
         senha_hash = generate_password_hash(password, method="pbkdf2:sha256")
-        user_row = UsuarioRepository.create_user(nome=nome, email=email, senha_hash=senha_hash, perfil="CONSUMIDOR")
+        user_row = UsuarioRepository.create_user(nome=nome, email=email, senha_hash=senha_hash, perfil="COLABORADOR")
         user = Usuario.from_row(user_row)
 
         jti = uuid.uuid4().hex

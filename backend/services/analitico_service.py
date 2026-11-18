@@ -82,14 +82,14 @@ class AnaliticoService:
             ],
         }
 
-        # ---------------- visão Consumidor (filtros UF / modalidade)
+        # ---------------- visão Colaborador (filtros UF / modalidade)
         c_atual = repo.totais_periodo(periodo, uf, modalidade)
         c_ant = repo.totais_periodo(anterior, uf, modalidade)
         sin = repo.sinistralidade_media(periodo, uf, modalidade)
         sin_ant = repo.sinistralidade_media(anterior, uf, modalidade)
         base_benef = repo.beneficiarios_com_despesa(periodo, uf, modalidade)
         base_benef_ant = repo.beneficiarios_com_despesa(anterior, uf, modalidade)
-        consumidor = {
+        colaborador = {
             "despesas_mh": c_atual["eventos_mh"],
             "despesas_mh_anterior": c_ant["eventos_mh"] or None,
             "sinistralidade": sin,
@@ -107,7 +107,7 @@ class AnaliticoService:
             "periodo_anterior": _p(anterior),
             "periodos": [_p(p) for p in periodos],
             "admin": admin,
-            "consumidor": consumidor,
+            "colaborador": colaborador,
         }
 
     @staticmethod

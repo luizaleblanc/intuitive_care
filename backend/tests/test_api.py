@@ -281,7 +281,7 @@ if __name__ == "__main__":
 
 
 class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
-    """Regras de perfil do MVP (ADMIN x CONSUMIDOR) e endpoints analíticos."""
+    """Regras de perfil do MVP (ADMIN x COLABORADOR) e endpoints analíticos."""
 
     def _login(self, email: str, senha: str) -> str:
         res = self.client.post("/api/auth/login", json={"email": email, "senha": senha})
@@ -315,11 +315,11 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
                     {"a": ano, "t": tri},
                 )
 
-    def test_consumidor_somente_leitura(self):
-        token = self._login("consumidor@intuitivecare.com.br", "Consulta@2025")
+    def test_colaborador_somente_leitura(self):
+        token = self._login("colaborador@intuitivecare.com.br", "Colaborador@2025")
         h = self._auth_headers(token)
         me = self.client.get("/api/auth/me", headers=h).get_json()["usuario"]
-        self.assertEqual(me["perfil"], "CONSUMIDOR")
+        self.assertEqual(me["perfil"], "COLABORADOR")
         self.assertEqual(self.client.post("/api/operadoras", json={}, headers=h).status_code, 403)
         self.assertEqual(
             self.client.patch("/api/operadoras/326305/status", json={"status": "Inativa"}, headers=h).status_code, 403
@@ -329,7 +329,7 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
     def test_inativas_visiveis_somente_para_admin(self):
         self._seed_analitico()
         admin = self._auth_headers(self._login("admin@intuitivecare.com.br", "Admin@2025"))
-        cons = self._auth_headers(self._login("consumidor@intuitivecare.com.br", "Consulta@2025"))
+        cons = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))
         total_admin = self.client.get("/api/operadoras", headers=admin).get_json()["total"]
         total_cons = self.client.get("/api/operadoras", headers=cons).get_json()["total"]
         self.assertEqual(total_admin, total_cons + 1)
@@ -346,7 +346,7 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         painel = self.client.get("/api/painel", headers=admin).get_json()
         self.assertEqual(painel["periodo"], {"ano": 2026, "trimestre": 2})
         self.assertAlmostEqual(painel["admin"]["total_despesas"], 110.0)
-        self.assertAlmostEqual(painel["consumidor"]["sinistralidade"], 110 / 150)
+        self.assertAlmostEqual(painel["colaborador"]["sinistralidade"], 110 / 150)
         self.assertEqual(len(painel["admin"]["serie"]), 2)
 
         contas = self.client.get("/api/contas?ano=2026&trimestre=2", headers=admin).get_json()
@@ -359,11 +359,11 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         contas = self.client.get("/api/contas?ano=2026&trimestre=2", headers=admin).get_json()
         self.assertTrue(contas["lote"]["auditado"])
 
-        cons = self._auth_headers(self._login("consumidor@intuitivecare.com.br", "Consulta@2025"))
+        cons = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))
         self.assertEqual(self.client.post("/api/contas/lotes/2026/1/auditar", headers=cons).status_code, 403)
 
     def test_perfil_preferencias_e_foto(self):
-        h = self._auth_headers(self._login("consumidor@intuitivecare.com.br", "Consulta@2025"))
+        h = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))
         res = self.client.put(
             "/api/auth/me",
             json={
@@ -382,3 +382,12 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         self.assertEqual(u["preferencias"]["idioma"], "pt-BR")
         ruim = self.client.put("/api/auth/me", json={"foto": "data:image/gif;base64,AAA"}, headers=h)
         self.assertEqual(ruim.status_code, 400)
+
+    def test_exportacao_csv_admin_e_colaborador(self):
+        for email, senha in (("admin@intuitivecare.com.br", "Admin@2025"),
+                             ("colaborador@intuitivecare.com.br", "Colaborador@2025")):
+            h = self._auth_headers(self._login(email, senha))
+            res = self.client.get("/api/operadoras/exportar.csv", headers=h)
+            self.assertEqual(res.status_code, 200)
+            self.assertIn("text/csv", res.content_type)
+            self.assertTrue(res.data.decode("utf-8").lstrip("﻿").startswith("Registro ANS;CNPJ"))
