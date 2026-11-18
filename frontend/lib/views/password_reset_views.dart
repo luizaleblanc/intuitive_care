@@ -61,7 +61,7 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
           child: PillTextField(
             controller: _email,
             label: 'E-mail',
-            hint: 'nome@intuitivecare.com.br',
+            hint: 'nome@email.com',
             icon: LucideIcons.mail,
             height: 48,
             keyboardType: TextInputType.emailAddress,

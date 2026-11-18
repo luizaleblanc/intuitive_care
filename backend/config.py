@@ -47,7 +47,8 @@ class Config:
     MAIL_PORT = int(os.getenv("MAIL_PORT", "1025"))
     MAIL_USER = os.getenv("MAIL_USER", "")
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
-    MAIL_FROM = os.getenv("MAIL_FROM", "no-reply@intuitivecare.com.br")
+    # Sem MAIL_FROM, o remetente é a própria conta SMTP.
+    MAIL_FROM = os.getenv("MAIL_FROM") or MAIL_USER or "no-reply@localhost"
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
     BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
 

@@ -130,14 +130,14 @@ class _LoginViewState extends State<LoginView> {
                           ],
                           Semantics(header: true, child: Text('Entrar', style: AppText.pageTitle())),
                           const SizedBox(height: 4),
-                          Text('Use seu e-mail corporativo e senha.', style: AppText.sans(14, color: AppColors.muted)),
+                          Text('Use seu e-mail e senha.', style: AppText.sans(14, color: AppColors.muted)),
                           const SizedBox(height: 32),
                           LabeledField(
                             label: 'E-mail',
                             child: PillTextField(
                               controller: _email,
                               label: 'E-mail',
-                              hint: 'nome@intuitivecare.com.br',
+                              hint: 'nome@email.com',
                               icon: LucideIcons.mail,
                               height: 48,
                               error: _erro != null,

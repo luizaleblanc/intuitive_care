@@ -353,7 +353,7 @@ MAIL_HOST=mailpit
 MAIL_PORT=1025
 MAIL_USER=
 MAIL_PASSWORD=
-MAIL_FROM=no-reply@intuitivecare.com.br
+MAIL_FROM=
 ```
 
 Com `docker compose up -d`, os e-mails ficam em **http://localhost:8025** (Mailpit). Com `MAIL_MODO=console`, o link aparece no log da API. Depois de mudar o `.env`, rode `docker restart intuitive_care-api-1`.
