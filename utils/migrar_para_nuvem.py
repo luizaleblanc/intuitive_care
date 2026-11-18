@@ -92,6 +92,9 @@ def main():
     if not args.banco.replace("_", "").isalnum():
         parser.error("Nome de banco inválido.")
 
+    if Config.DB_HOST == args.host or "tidbcloud.com" in os.getenv("DATABASE_URL", ""):
+        parser.error("A origem aponta para o TiDB: restaure no .env os dados do MySQL local.")
+
     admin_email = validate_email(args.admin_email)
     senha_banco = getpass.getpass("Senha do TiDB (não aparece ao digitar): ")
     admin_senha = validate_password(getpass.getpass("Nova senha do administrador da homologação: "))
