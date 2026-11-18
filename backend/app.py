@@ -1,8 +1,3 @@
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
 from flask import Flask, jsonify
 from flask_cors import CORS
 
@@ -15,8 +10,6 @@ from backend.routes.estatistica_routes import estatistica_bp
 from backend.routes.health_routes import health_bp
 from backend.routes.operadora_routes import operadora_bp
 from backend.services.validators import BusinessRuleError
-
-load_dotenv()
 
 
 def create_app(init_db: bool = True, seed_db: bool = True) -> Flask:
@@ -49,6 +42,9 @@ def create_app(init_db: bool = True, seed_db: bool = True) -> Flask:
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(err: Exception):
+        if Config.APP_ENV == "production":
+            print(f"[ERRO] {type(err).__name__}", flush=True)
+            return jsonify({"erro": "Erro interno do servidor."}), 500
         return jsonify({"erro": f"Erro interno do servidor: {str(err)}"}), 500
 
     if init_db:

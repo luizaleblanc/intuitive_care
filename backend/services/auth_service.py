@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
 import uuid
@@ -251,7 +252,12 @@ class AuthService:
             )
             link = f"{Config.FRONTEND_URL}/#/redefinir-senha?token={token}"
             # Em segundo plano, para o tempo de resposta não denunciar contas existentes.
-            Thread(target=cls._enviar_reset, args=(user_row["email"], user_row["nome"], link), daemon=True).start()
+            destino = (user_row["email"], user_row["nome"], link)
+            if os.getenv("VERCEL"):
+                # Na Vercel a função congela após responder: o envio precisa terminar antes.
+                cls._enviar_reset(*destino)
+            else:
+                Thread(target=cls._enviar_reset, args=destino, daemon=True).start()
 
         return {"mensagem": "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."}
 

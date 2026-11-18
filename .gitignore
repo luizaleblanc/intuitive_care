@@ -13,3 +13,7 @@ data/*.csv
 .vscode/
 dist/
 backend/database/*.db
+.vercel
+
+public/
+frontend/android/build/

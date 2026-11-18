@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote_plus
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -59,4 +60,4 @@ class Config:
             return explicit_url
         if cls.DB_ENGINE.lower() == "sqlite":
             return f"sqlite:///{cls.SQLITE_PATH}"
-        return f"mysql+pymysql://{cls.DB_USER}:{cls.DB_PASSWORD}@{cls.DB_HOST}:{cls.DB_PORT}/{cls.DB_NAME}?charset=utf8mb4"
+        return f"mysql+pymysql://{quote_plus(cls.DB_USER)}:{quote_plus(cls.DB_PASSWORD)}@{cls.DB_HOST}:{cls.DB_PORT}/{cls.DB_NAME}?charset=utf8mb4"

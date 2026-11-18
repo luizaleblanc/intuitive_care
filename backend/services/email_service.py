@@ -2,11 +2,16 @@ import html
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import parseaddr
+from pathlib import Path
+from string import Template
 from typing import Any, Dict
 
 import requests
 
 from backend.config import Config
+
+TEMPLATE_RESET = Path(__file__).resolve().parent.parent / "templates" / "email" / "reset_senha.html"
 
 
 class EmailService:
@@ -14,27 +19,11 @@ class EmailService:
 
     @staticmethod
     def _html_reset(nome: str, link: str) -> str:
-        nome_seguro = html.escape(nome)
-        link_seguro = html.escape(link, quote=True)
-        return f"""\
-<div style="margin:0;padding:32px 16px;background:#F2F4F3;font-family:Arial,sans-serif;color:#0F172A">
-  <div style="max-width:520px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden">
-    <div style="background:#113E32;padding:24px 32px;color:#FFFFFF;font-size:18px;font-weight:700">
-      Intuitive <span style="color:#4AD295">Care</span>
-    </div>
-    <div style="padding:32px;font-size:15px;line-height:1.6">
-      <p style="margin-top:0">Olá, <strong>{nome_seguro}</strong>.</p>
-      <p>Recebemos um pedido para redefinir a senha da sua conta.</p>
-      <p style="margin:28px 0">
-        <a href="{link_seguro}" style="background:#4AD295;color:#113E32;padding:14px 28px;border-radius:999px;font-weight:700;text-decoration:none">Redefinir senha</a>
-      </p>
-      <p style="color:#64748B;font-size:13px;margin-bottom:0">
-        O link vale por {Config.RESET_TOKEN_EXPIRA_MIN} minutos e só pode ser usado uma vez.
-        Se você não fez esse pedido, ignore este e-mail.
-      </p>
-    </div>
-  </div>
-</div>"""
+        return Template(TEMPLATE_RESET.read_text(encoding="utf-8")).substitute(
+            nome=html.escape(nome),
+            link=html.escape(link, quote=True),
+            validade=Config.RESET_TOKEN_EXPIRA_MIN,
+        )
 
     @classmethod
     def enviar_reset_senha(cls, para: str, nome: str, link: str) -> Dict[str, Any]:
@@ -63,7 +52,7 @@ class EmailService:
                         server.login(Config.MAIL_USER, Config.MAIL_PASSWORD)
                 elif Config.MAIL_USER:
                     raise RuntimeError("Servidor SMTP sem STARTTLS: credenciais não enviadas.")
-                server.sendmail(Config.MAIL_FROM, [para], msg.as_string())
+                server.sendmail(parseaddr(Config.MAIL_FROM)[1], [para], msg.as_string())
             return {"provider": "smtp", "delivered": True}
 
         if modo == "resend" and Config.RESEND_API_KEY:

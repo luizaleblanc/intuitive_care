@@ -15,6 +15,7 @@ from backend.app import create_app
 from backend.config import Config
 from backend.database.connection import get_connection, reset_engine
 from backend.database.init_db import initialize_database
+from backend.services.email_service import EmailService
 
 
 class IntuitiveCareApiTestCase(unittest.TestCase):
@@ -150,6 +151,12 @@ class IntuitiveCareApiTestCase(unittest.TestCase):
         with get_connection() as conn:
             conn.execute(text("UPDATE tokens_reset_senha SET expira_em = :e"), {"e": datetime(2020, 1, 1)})
         self.assertIn("expirou", self._redefinir(segundo).get_json()["erro"])
+
+    def test_template_reset_preenche_e_escapa(self):
+        corpo = EmailService._html_reset("<b>Ana</b>", "http://app/#/redefinir-senha?token=abc")
+        self.assertIn("&lt;b&gt;Ana&lt;/b&gt;", corpo)
+        self.assertIn('href="http://app/#/redefinir-senha?token=abc"', corpo)
+        self.assertNotIn("$", corpo)
 
     def test_reset_senha_limite_de_pedidos(self):
         for email in ("admin@intuitivecare.com.br", "ninguem@intuitivecare.com.br"):

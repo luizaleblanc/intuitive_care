@@ -442,7 +442,7 @@ SEED_DESPESAS = [
 ]
 
 
-def initialize_database(database_url: Optional[str] = None, seed: bool = True) -> None:
+def initialize_database(database_url=None, seed: bool = True, demo: bool = True) -> None:
     """Cria as tabelas caso não existam e popula massa inicial demonstrativa se vazio."""
     with get_connection(database_url) as conn:
         dialect = conn.dialect.name
@@ -450,7 +450,8 @@ def initialize_database(database_url: Optional[str] = None, seed: bool = True) -
         for stmt in statements:
             conn.execute(text(stmt))
         migrar_schema(conn)
-        garantir_usuarios_demonstracao(conn)
+        if demo:
+            garantir_usuarios_demonstracao(conn)
 
         if not seed:
             return
