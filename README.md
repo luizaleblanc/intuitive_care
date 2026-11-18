@@ -12,7 +12,7 @@ A tabela abaixo compara o estado **antigo (legado)** do projeto com o que está 
 
 | Funcionalidade / Camada | Como era no Projeto Antigo (Antes) | Como está no Projeto Atual (Agora) |
 | :--- | :--- | :--- |
-| **Autenticação & Controle de Sessão** | ❌ **Inexistente no projeto original** (não havia login, senhas nem usuários; rotas eram abertas). | ✅ **100% Implementado e Ativo:**<br>• Cadastro (`POST /api/auth/register`) com senha criptografada em hash seguro.<br>• Login (`POST /api/auth/login`) com validação no backend e emissão de JWT.<br>• Identificação do usuário logado via JSON (`GET /api/auth/me`).<br>• Atualização de perfil (`PUT /api/auth/me`): nome, e-mail, cargo, telefone, data de nascimento, foto (JPG/PNG até 2 MB) e preferências.<br>• Logoff com revogação no banco (`POST /api/auth/logout` invalida a sessão em `sessoes_tokens`).<br>• Recuperação de senha por e-mail via API (`POST /api/auth/forgot-password` e `POST /api/auth/reset-password`). |
+| **Autenticação & Controle de Sessão** | ❌ **Inexistente no projeto original** (não havia login, senhas nem usuários; rotas eram abertas). | ✅ **100% Implementado e Ativo:**<br>• Cadastro (`POST /api/auth/register`) com senha criptografada em hash seguro.<br>• Login (`POST /api/auth/login`) com validação no backend e emissão de JWT.<br>• Identificação do usuário logado via JSON (`GET /api/auth/me`).<br>• Atualização de perfil (`PUT /api/auth/me`): nome, e-mail, cargo, telefone, data de nascimento, foto (JPG/PNG até 2 MB) e preferências.<br>• Logoff com revogação no banco (`POST /api/auth/logout` invalida a sessão em `sessoes_tokens`).<br>• Redefinição de senha por link enviado por e-mail (`POST /api/auth/esqueci-senha` e `POST /api/auth/redefinir-senha`). |
 | **Perfis de Acesso** | ❌ Inexistentes. | ✅ **ADMIN** (leitura + escrita + exportação) e **COLABORADOR** (somente leitura + exportação). Toda rota de escrita exige ADMIN (`HTTP 403` para o Colaborador), e operadoras inativas só aparecem para o Administrador. Veja [Perfis de acesso](#perfis-de-acesso). |
 | **Frontend** | ❌ Aplicação Web legada em Vue.js 3 + Tailwind CSS (`web-app/` e `frontend/index.html`). | ✅ **100% Migrado para Flutter** (`frontend/`, foco em web desktop) em **MVVM** (`models`, `views`, `viewmodels`, `services`, `repositories`) com **Provider** e rotas via **go_router**. Visual fiel ao **Design System Intuitive Care** (`frontend/web/design-system.html`): Página inicial, Login, Painel Geral, Operadoras ANS, Despesas Contábeis e Configurações de Perfil. |
 | **Arquitetura do Backend** | ❌ Script monolítico em arquivo único `api/main_api.py` com apenas 4 endpoints `GET`. | ✅ **100% Reestruturado em Camadas** (`backend/`): separação clara em **Rotas (`routes/`)**, **Regras de Negócio e Validações (`services/`)**, **Persistência (`repositories/`)**, **Modelos (`models/`)** e **Banco (`database/`)**. |
@@ -212,8 +212,8 @@ Todas as requisições e respostas utilizam **JSON**. Rotas protegidas exigem ca
 | **Auth** | `GET` | `/api/auth/me` | Retorna dados, perfil e preferências do usuário autenticado |
 | **Auth** | `PUT` | `/api/auth/me` | Atualiza nome, e-mail, cargo, telefone, nascimento, foto e preferências |
 | **Auth** | `POST` | `/api/auth/logout` | Encerra sessão revogando o token no banco de dados |
-| **Auth** | `POST` | `/api/auth/forgot-password` | Gera código de recuperação e dispara e-mail via API |
-| **Auth** | `POST` | `/api/auth/reset-password` | Valida código temporário e redefine a senha |
+| **Auth** | `POST` | `/api/auth/esqueci-senha` | Envia o link de redefinição, com resposta igual para e-mail existente ou não (limite: 3 pedidos a cada 15 min) |
+| **Auth** | `POST` | `/api/auth/redefinir-senha` | Valida o token de uso único, troca a senha e encerra as sessões |
 | **Painel** | `GET` | `/api/painel` | KPIs, série trimestral, modalidades e ranking (`ano`, `trimestre`, `uf`, `modalidade`) |
 | **Contas** | `GET` | `/api/contas` | Plano de contas ANS do setor com comparação ao trimestre anterior (`ano`, `trimestre`, `grupo`) |
 | **Contas** | `POST` | `/api/contas/lotes/<ano>/<trimestre>/auditar` | Marca o lote do trimestre como auditado **(ADMIN)** |
@@ -310,7 +310,7 @@ flutter run
 flutter run --dart-define=API_URL=http://192.168.0.10:5000/api
 ```
 
-Rotas do app: `/` (início), `/login`, `/painel`, `/operadoras`, `/despesas` e `/perfil`. As rotas autenticadas redirecionam para `/login` quando não há sessão.
+Rotas do app: `/` (início), `/login`, `/cadastro`, `/esqueci-senha`, `/redefinir-senha`, `/painel`, `/operadoras`, `/despesas` e `/perfil`. As rotas autenticadas redirecionam para `/login` quando não há sessão.
 
 ### 7. Executando Testes Automatizados
 
@@ -336,42 +336,19 @@ O arquivo `dist/intuitive_care_backend_e_sql.zip` será gerado contendo o códig
 
 ---
 
-## Próximos Passos: Cadastro e Reset de Senha
+## Cadastro e Redefinição de Senha
 
-> Planejado para 18/11/2026. Antes de começar, corrija as linhas 17 e 18 do `.env`, senão o `docker-compose` não consegue ler o arquivo.
+- **Cadastro (`/cadastro`):** nome, e-mail, cargo opcional, senha e aceite dos termos. A conta nasce como Colaborador e o usuário segue para o login com o e-mail preenchido.
+- **Regra de senha:** mínimo de 8 caracteres, com letra maiúscula, número e símbolo.
+- **Redefinição (`/esqueci-senha` → e-mail → `/redefinir-senha?token=...`):** o link vale por `RESET_TOKEN_EXPIRA_MIN` minutos e só pode ser usado uma vez. Pedir um novo link invalida o anterior, e concluir a troca encerra todas as sessões do usuário.
+- **Segurança:** o banco guarda apenas o hash do token, e a resposta do pedido é a mesma para e-mails cadastrados ou não.
 
-### 1. Tela de cadastro (≈2h)
-- [ ] **Rota `/cadastro`** (`register_view.dart`), com o mesmo layout do login:
-  - Painel Forest `#113E32` a partir de 1024px.
-  - Fundo Surface `#F2F4F3`.
-  - Campos com `PillTextField`.
-  - Botão Mint `#4AD295`.
-  - Destaques Lime `#C8F169`.
-  - Textos Ink `#0F172A` / Muted `#64748B`.
-- [ ] **Campos:** nome, e-mail, cargo, senha, confirmar senha e aceite dos termos.
-  - Indicador de força da senha (`ProgressBar`).
-  - Validação igual à do backend.
-- [ ] **`AuthViewModel.register()`:** estados de carregamento e erro e toast de sucesso. Depois do cadastro, redireciona para o login com o e-mail já preenchido.
-- [ ] **Links:** "Criar conta" no login e "Começar agora" na home levam para `/cadastro`.
-- [ ] **Testes:**
-  - Incluir `/cadastro` no `responsivo_test.dart`, em 360px e 1440px.
-  - Teste de ViewModel para e-mail duplicado (409).
-
-### 2. Reset de senha: backend (≈2h)
-- [ ] **Tabela `tokens_reset_senha`:** `usuario_id`, `token_hash`, `expira_em`, `usado_em`. Criada por migração idempotente.
-- [ ] **`POST /api/auth/esqueci-senha`:** sempre responde 200, para não revelar quais e-mails estão cadastrados.
-- [ ] **`POST /api/auth/redefinir-senha`:**
-  - O token vale para um único uso.
-  - Ao redefinir, todas as sessões em `sessoes_tokens` são invalidadas.
-- [ ] **Limite de tentativas:** até 3 pedidos por e-mail a cada 15 minutos.
-- [ ] **Mailpit no `docker-compose.yml`:** os e-mails ficam visíveis em http://localhost:8025.
-- [ ] **E-mail HTML com a paleta:** cabeçalho Forest e botão Mint.
-- [ ] **Novas variáveis no `.env` e no `.env.example`:**
+### Configuração no `.env`
 
 ```env
 RESET_TOKEN_EXPIRA_MIN=30
 FRONTEND_URL=http://localhost:8080
-MAIL_MODO=smtp            # smtp | console (console imprime o link no log da API)
+MAIL_MODO=smtp            # smtp | console | resend | brevo
 MAIL_HOST=mailpit
 MAIL_PORT=1025
 MAIL_USER=
@@ -379,15 +356,9 @@ MAIL_PASSWORD=
 MAIL_FROM=no-reply@intuitivecare.com.br
 ```
 
-### 3. Reset de senha: frontend (≈1h30)
-- [ ] **Telas `/esqueci-senha` e `/redefinir-senha?token=...`**, no mesmo layout do cadastro.
-- [ ] **Link "Esqueci minha senha"** no login.
-- [ ] **Erros com `ErrorBox`:**
-  - Token expirado.
-  - Token já usado.
-  - Senhas não conferem.
+Com `docker compose up -d`, os e-mails ficam em **http://localhost:8025** (Mailpit). Com `MAIL_MODO=console`, o link aparece no log da API. Depois de mudar o `.env`, rode `docker restart intuitive_care-api-1`.
 
-### 4. Roteiro de QA (≈1h)
+### Roteiro de QA
 | # | Cenário | Esperado |
 |---|---|---|
 | 1 | Cadastro válido | Toast, redirecionamento ao login e perfil COLABORADOR |
@@ -402,11 +373,6 @@ MAIL_FROM=no-reply@intuitivecare.com.br
 | 10 | Sessão aberta antes do reset | Derrubada, pede login de novo |
 | 11 | 4 pedidos seguidos | O 4º é bloqueado pelo limite de tentativas |
 | 12 | Admin redefine a senha | Continua com perfil e acessos de ADMIN |
-
-### 5. Fechamento (≈30min)
-- [ ] **Testes:** rodar os testes do backend e do Flutter e o `flutter analyze`.
-- [ ] **README:** atualizar com o fluxo de cadastro e reset, as variáveis do `.env` e o Mailpit.
-- [ ] **Commits:** separar em backend, frontend e docs.
 
 ---
 
