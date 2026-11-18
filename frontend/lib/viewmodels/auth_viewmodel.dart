@@ -15,7 +15,6 @@ class AuthViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _successMessage;
-  String? _demoRecoveryCode;
 
   AuthViewModel(this._repository);
 
@@ -25,7 +24,6 @@ class AuthViewModel extends ChangeNotifier {
   bool get isAuthenticated => _status == AuthStatus.authenticated && _currentUser != null;
   String? get errorMessage => _errorMessage;
   String? get successMessage => _successMessage;
-  String? get demoRecoveryCode => _demoRecoveryCode;
 
   void clearMessages() {
     _errorMessage = null;
@@ -76,6 +74,7 @@ class AuthViewModel extends ChangeNotifier {
     required String nome,
     required String email,
     required String senha,
+    String? cargo,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -83,14 +82,12 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _repository.register(
+      _successMessage = await _repository.register(
         nome: nome.trim(),
         email: email.trim(),
         senha: senha,
+        cargo: cargo?.trim(),
       );
-      _currentUser = result.user;
-      _status = AuthStatus.authenticated;
-      _successMessage = result.message;
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -138,13 +135,10 @@ class AuthViewModel extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     _successMessage = null;
-    _demoRecoveryCode = null;
     notifyListeners();
 
     try {
-      final result = await _repository.forgotPassword(email: email.trim());
-      _successMessage = result.message;
-      _demoRecoveryCode = result.demoCode;
+      _successMessage = await _repository.forgotPassword(email: email.trim());
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -156,8 +150,7 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<bool> confirmPasswordReset({
-    required String email,
-    required String codigo,
+    required String token,
     required String novaSenha,
   }) async {
     _isLoading = true;
@@ -166,12 +159,7 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _successMessage = await _repository.resetPassword(
-        email: email.trim(),
-        codigo: codigo.trim(),
-        novaSenha: novaSenha,
-      );
-      _demoRecoveryCode = null;
+      _successMessage = await _repository.resetPassword(token: token, novaSenha: novaSenha);
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;

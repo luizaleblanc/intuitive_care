@@ -91,6 +91,46 @@ void main() {
     expect(vm.status, AuthStatus.unauthenticated);
   });
 
+  test('Cadastro não abre sessão e expõe e-mail duplicado (409)', () async {
+    Map<String, dynamic>? corpo;
+    var status = 201;
+    final client = ApiClient(
+      httpClient: MockClient((req) async {
+        corpo = jsonDecode(req.body) as Map<String, dynamic>;
+        return status == 201
+            ? _json({'mensagem': 'ok', 'token': 'ignorado'}, 201)
+            : _json({'erro': 'Já existe um usuário cadastrado com este e-mail.'}, status);
+      }),
+    );
+    final sessao = _MemoriaSessao();
+    final vm = AuthViewModel(AuthRepository(apiClient: client, authService: AuthService(client), storageService: sessao));
+
+    expect(await vm.register(nome: 'Ana', email: 'ana@x.com', senha: 'Teste@123', cargo: 'Analista'), isTrue);
+    expect(corpo!['cargo'], 'Analista');
+    expect(vm.isAuthenticated, isFalse);
+    expect(await sessao.readToken(), isNull);
+
+    status = 409;
+    expect(await vm.register(nome: 'Ana', email: 'ana@x.com', senha: 'Teste@123'), isFalse);
+    expect(vm.errorMessage, contains('Já existe'));
+  });
+
+  test('Redefinição envia token e nova senha', () async {
+    late http.Request pedido;
+    final client = ApiClient(
+      httpClient: MockClient((req) async {
+        pedido = req;
+        return _json({'mensagem': 'ok'});
+      }),
+    );
+    final vm = AuthViewModel(
+      AuthRepository(apiClient: client, authService: AuthService(client), storageService: _MemoriaSessao()),
+    );
+    expect(await vm.confirmPasswordReset(token: 'abc', novaSenha: 'Teste@123'), isTrue);
+    expect(pedido.url.path, endsWith('/auth/redefinir-senha'));
+    expect(jsonDecode(pedido.body), {'token': 'abc', 'nova_senha': 'Teste@123'});
+  });
+
   test('PainelViewModel envia Ano + Trimestre e ajusta o trimestre ao trocar de ano', () async {
     final consultas = <Map<String, String>>[];
     final client = ApiClient(

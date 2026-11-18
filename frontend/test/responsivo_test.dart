@@ -5,9 +5,12 @@ import 'package:intuitive_care_app/repositories/auth_repository.dart';
 import 'package:intuitive_care_app/services/api_client.dart';
 import 'package:intuitive_care_app/services/auth_service.dart';
 import 'package:intuitive_care_app/services/session_storage_service.dart';
+import 'package:intuitive_care_app/shared/ui/ui.dart';
 import 'package:intuitive_care_app/viewmodels/auth_viewmodel.dart';
 import 'package:intuitive_care_app/views/home_view.dart';
 import 'package:intuitive_care_app/views/login_view.dart';
+import 'package:intuitive_care_app/views/password_reset_views.dart';
+import 'package:intuitive_care_app/views/register_view.dart';
 import 'package:provider/provider.dart';
 
 /// Critério 11 do MVP: Página inicial e Login sem rolagem horizontal em 360px.
@@ -49,6 +52,22 @@ void main() {
       expect(find.text('Entrar'), findsWidgets);
       // Painel Forest só aparece a partir de 1024px.
       expect(find.textContaining('sem planilha no meio.', findRichText: true), largura >= 1024 ? findsOneWidget : findsNothing);
+    });
+
+    testWidgets('Cadastro sem overflow em ${largura.toInt()}px', (tester) async {
+      await renderizar(tester, const RegisterView(), largura);
+      ignorarFontes(tester);
+      expect(find.text('Criar conta'), findsWidgets);
+      final botao = tester.widget<AppButton>(find.widgetWithText(AppButton, 'Criar conta'));
+      expect(botao.onPressed, isNull);
+    });
+
+    testWidgets('Reset de senha sem overflow em ${largura.toInt()}px', (tester) async {
+      await renderizar(tester, const ForgotPasswordView(), largura);
+      ignorarFontes(tester);
+      await renderizar(tester, const ResetPasswordView(), largura);
+      ignorarFontes(tester);
+      expect(find.text('Link de redefinição inválido.'), findsOneWidget);
     });
   }
 }

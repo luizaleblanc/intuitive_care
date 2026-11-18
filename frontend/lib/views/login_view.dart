@@ -9,17 +9,20 @@ import '../shared/brand/brand.dart';
 import '../shared/ui/ui.dart';
 import '../shared/utils/exporter.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import 'auth_layout.dart';
 
 /// Login (/login) — duas colunas no desktop, só formulário no mobile (seção 7.2).
 class LoginView extends StatefulWidget {
-  const LoginView({super.key});
+  /// E-mail vindo do cadastro recém-concluído.
+  final String? emailInicial;
+  const LoginView({super.key, this.emailInicial});
 
   @override
   State<LoginView> createState() => _LoginViewState();
 }
 
 class _LoginViewState extends State<LoginView> {
-  final _email = TextEditingController();
+  late final _email = TextEditingController(text: widget.emailInicial);
   final _senha = TextEditingController();
   bool _mostrar = false;
   String? _erro;
@@ -74,7 +77,7 @@ class _LoginViewState extends State<LoginView> {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (desktop) const Expanded(child: _PainelForest()),
+          if (desktop) const Expanded(child: PainelForest()),
           Expanded(child: _formulario(context, desktop)),
         ],
       ),
@@ -147,7 +150,7 @@ class _LoginViewState extends State<LoginView> {
                           LabeledField(
                             label: 'Senha',
                             trailing: InkWell(
-                              onTap: () {},
+                              onTap: () => context.go('/esqueci-senha'),
                               child: Text('Esqueci a senha',
                                   style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.forest)),
                             ),
@@ -185,6 +188,14 @@ class _LoginViewState extends State<LoginView> {
                             loadingLabel: 'Entrando...',
                             onPressed: _entrar,
                           ),
+                          const SizedBox(height: 16),
+                          Center(
+                            child: TextButton(
+                              onPressed: () => context.go('/cadastro'),
+                              child: Text('Não tem conta? Criar conta',
+                                  style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.forest)),
+                            ),
+                          ),
                           if (kDebugMode) ...[
                             const SizedBox(height: 32),
                             _AcessosDemo(
@@ -208,65 +219,6 @@ class _LoginViewState extends State<LoginView> {
       ),
     );
   }
-}
-
-class _PainelForest extends StatelessWidget {
-  const _PainelForest();
-
-  @override
-  Widget build(BuildContext context) => Container(
-        clipBehavior: Clip.hardEdge,
-        decoration: const BoxDecoration(color: AppColors.forest),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -96,
-              top: -96,
-              child: Container(
-                width: 384,
-                height: 384,
-                decoration: BoxDecoration(color: AppColors.mint.withValues(alpha: 0.1), shape: BoxShape.circle),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(48),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InkWell(
-                    onTap: () => context.go('/'),
-                    child: const LogoHorizontal(negative: true, size: 40),
-                  ),
-                  const Spacer(),
-                  const Mark(size: 120, bg: null, strokeWidth: 1.8),
-                  const SizedBox(height: 32),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 448),
-                    child: Text.rich(
-                      TextSpan(children: [
-                        const TextSpan(text: 'Do arquivo da ANS ao painel, '),
-                        TextSpan(text: 'sem planilha no meio.', style: TextStyle(color: AppColors.mint)),
-                      ]),
-                      style: AppText.display(34, color: Colors.white).copyWith(height: 1.25),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 448),
-                    child: Text(
-                      'Extração, tratamento e análise de operadoras e despesas assistenciais em um só lugar.',
-                      style: AppText.sans(16, color: Colors.white.withValues(alpha: 0.7), height: 1.5),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text('Intuitive Care · Controle e Tratamento de dados',
-                      style: AppText.sans(12, color: Colors.white.withValues(alpha: 0.5))),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 class _AcessosDemo extends StatelessWidget {

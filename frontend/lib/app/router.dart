@@ -9,9 +9,12 @@ import '../views/home_view.dart';
 import '../views/login_view.dart';
 import '../views/operadoras_view.dart';
 import '../views/painel_view.dart';
+import '../views/password_reset_views.dart';
 import '../views/perfil_view.dart';
+import '../views/register_view.dart';
 
-const _rotasPublicas = {'/', '/login'};
+const _rotasSoVisitante = {'/login', '/cadastro', '/esqueci-senha'};
+const _rotasPublicas = {'/', '/redefinir-senha', ..._rotasSoVisitante};
 
 /// Rotas do MVP (seção 6): públicas (/ e /login) e autenticadas dentro do AppShell.
 GoRouter buildRouter(AuthViewModel auth) => GoRouter(
@@ -22,12 +25,18 @@ GoRouter buildRouter(AuthViewModel auth) => GoRouter(
         if (auth.status == AuthStatus.initializing) return null;
         final logado = auth.status == AuthStatus.authenticated;
         if (!logado && !_rotasPublicas.contains(rota)) return '/login';
-        if (logado && rota == '/login') return '/painel';
+        if (logado && _rotasSoVisitante.contains(rota)) return '/painel';
         return null;
       },
       routes: [
         GoRoute(path: '/', builder: (_, _) => const HomeView()),
-        GoRoute(path: '/login', builder: (_, _) => const LoginView()),
+        GoRoute(path: '/login', builder: (_, s) => LoginView(emailInicial: s.extra as String?)),
+        GoRoute(path: '/cadastro', builder: (_, _) => const RegisterView()),
+        GoRoute(path: '/esqueci-senha', builder: (_, _) => const ForgotPasswordView()),
+        GoRoute(
+          path: '/redefinir-senha',
+          builder: (_, s) => ResetPasswordView(token: s.uri.queryParameters['token']),
+        ),
         ShellRoute(
           builder: (context, state, child) => ListenableBuilder(
             listenable: auth,

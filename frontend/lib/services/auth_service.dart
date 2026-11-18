@@ -10,11 +10,13 @@ class AuthService {
     required String nome,
     required String email,
     required String senha,
+    String? cargo,
   }) async {
     final res = await _client.post('/auth/register', body: {
       'nome': nome,
       'email': email,
       'senha': senha,
+      if (cargo != null && cargo.isNotEmpty) 'cargo': cargo,
     });
     return Map<String, dynamic>.from(res as Map);
   }
@@ -45,18 +47,16 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> forgotPassword({required String email}) async {
-    final res = await _client.post('/auth/forgot-password', body: {'email': email});
+    final res = await _client.post('/auth/esqueci-senha', body: {'email': email});
     return Map<String, dynamic>.from(res as Map);
   }
 
   Future<Map<String, dynamic>> resetPassword({
-    required String email,
-    required String codigo,
+    required String token,
     required String novaSenha,
   }) async {
-    final res = await _client.post('/auth/reset-password', body: {
-      'email': email,
-      'codigo': codigo,
+    final res = await _client.post('/auth/redefinir-senha', body: {
+      'token': token,
       'nova_senha': novaSenha,
     });
     return Map<String, dynamic>.from(res as Map);

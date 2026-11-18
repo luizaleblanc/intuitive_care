@@ -15,20 +15,6 @@ class AuthSessionResult {
   });
 }
 
-class PasswordRecoveryResult {
-  final String message;
-  final bool emailSent;
-  final String? provider;
-  final String? demoCode;
-
-  const PasswordRecoveryResult({
-    required this.message,
-    required this.emailSent,
-    this.provider,
-    this.demoCode,
-  });
-}
-
 /// Repositório responsável por intermediar autenticação e sessão entre ViewModel e AuthService.
 class AuthRepository {
   final ApiClient _apiClient;
@@ -79,21 +65,15 @@ class AuthRepository {
     );
   }
 
-  Future<AuthSessionResult> register({
+  /// Cria a conta sem abrir sessão: o usuário entra pela tela de login.
+  Future<String> register({
     required String nome,
     required String email,
     required String senha,
+    String? cargo,
   }) async {
-    final res = await _authService.register(nome: nome, email: email, senha: senha);
-    final token = (res['token'] ?? '').toString();
-    final user = UserModel.fromJson(res['usuario'] as Map<String, dynamic>);
-    _apiClient.setAuthToken(token);
-    await _storageService.saveToken(token);
-    return AuthSessionResult(
-      token: token,
-      user: user,
-      message: (res['mensagem'] ?? 'Cadastro efetuado').toString(),
-    );
+    final res = await _authService.register(nome: nome, email: email, senha: senha, cargo: cargo);
+    return (res['mensagem'] ?? 'Cadastro efetuado').toString();
   }
 
   Future<UserModel> refreshUser() async {
@@ -119,26 +99,16 @@ class AuthRepository {
     await _storageService.clearToken();
   }
 
-  Future<PasswordRecoveryResult> forgotPassword({required String email}) async {
+  Future<String> forgotPassword({required String email}) async {
     final res = await _authService.forgotPassword(email: email);
-    return PasswordRecoveryResult(
-      message: (res['mensagem'] ?? '').toString(),
-      emailSent: res['email_enviado'] == true,
-      provider: res['provedor_email']?.toString(),
-      demoCode: res['codigo_demonstracao']?.toString(),
-    );
+    return (res['mensagem'] ?? '').toString();
   }
 
   Future<String> resetPassword({
-    required String email,
-    required String codigo,
+    required String token,
     required String novaSenha,
   }) async {
-    final res = await _authService.resetPassword(
-      email: email,
-      codigo: codigo,
-      novaSenha: novaSenha,
-    );
+    final res = await _authService.resetPassword(token: token, novaSenha: novaSenha);
     return (res['mensagem'] ?? 'Senha redefinida com sucesso.').toString();
   }
 }
