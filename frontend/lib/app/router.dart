@@ -13,8 +13,9 @@ import '../views/password_reset_views.dart';
 import '../views/perfil_view.dart';
 import '../views/register_view.dart';
 
-const _rotasSoVisitante = {'/login', '/cadastro', '/esqueci-senha'};
-const _rotasPublicas = {'/', '/redefinir-senha', ..._rotasSoVisitante};
+const _rotasSoVisitante = {'/login', '/cadastro'};
+// O reset fica acessível mesmo com sessão aberta: o link pode ser aberto no navegador já logado.
+const _rotasPublicas = {'/', '/esqueci-senha', '/redefinir-senha', ..._rotasSoVisitante};
 
 /// Rotas do MVP (seção 6): públicas (/ e /login) e autenticadas dentro do AppShell.
 GoRouter buildRouter(AuthViewModel auth) => GoRouter(
