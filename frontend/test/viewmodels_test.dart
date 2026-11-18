@@ -44,7 +44,7 @@ Map<String, dynamic> _painel(int ano, int tri) => {
         'serie': [],
         'modalidades': [],
       },
-      'consumidor': {'despesas_mh': 1.0, 'beneficiarios': 1, 'ranking': [], 'serie': []},
+      'colaborador': {'despesas_mh': 1.0, 'beneficiarios': 1, 'ranking': [], 'serie': []},
     };
 
 void main() {

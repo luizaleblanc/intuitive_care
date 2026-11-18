@@ -42,7 +42,7 @@ class RankingItem {
   const RankingItem(this.registroAns, this.nome, this.uf, this.valor);
 }
 
-/// Resposta de GET /api/painel (visões Administrador e Consumidor).
+/// Resposta de GET /api/painel (visões Administrador e Colaborador).
 class PainelModel {
   final Periodo periodo;
   final List<Periodo> periodos;
@@ -57,7 +57,7 @@ class PainelModel {
   final List<SerieTrimestral> serieAdmin;
   final List<ModalidadeFatia> modalidades;
 
-  // Consumidor
+  // Colaborador
   final double despesasMh;
   final double? despesasMhAnterior;
   final double? sinistralidade;
@@ -67,7 +67,7 @@ class PainelModel {
   final double? ticketMedio;
   final double? ticketMedioAnterior;
   final List<RankingItem> ranking;
-  final List<SerieTrimestral> serieConsumidor;
+  final List<SerieTrimestral> serieColaborador;
 
   const PainelModel({
     required this.periodo,
@@ -89,12 +89,12 @@ class PainelModel {
     this.ticketMedio,
     this.ticketMedioAnterior,
     required this.ranking,
-    required this.serieConsumidor,
+    required this.serieColaborador,
   });
 
   factory PainelModel.fromJson(Map<String, dynamic> j) {
     final a = Map<String, dynamic>.from(j['admin'] as Map);
-    final c = Map<String, dynamic>.from(j['consumidor'] as Map);
+    final c = Map<String, dynamic>.from(j['colaborador'] as Map);
     return PainelModel(
       periodo: Periodo.fromJson(Map<String, dynamic>.from(j['periodo'] as Map)),
       periodos: _list(j['periodos']).map(Periodo.fromJson).toList(),
@@ -125,7 +125,7 @@ class PainelModel {
                 _d(r['valor']) ?? 0,
               ))
           .toList(),
-      serieConsumidor: _list(c['serie']).map(SerieTrimestral.fromJson).toList(),
+      serieColaborador: _list(c['serie']).map(SerieTrimestral.fromJson).toList(),
     );
   }
 }

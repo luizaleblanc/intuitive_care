@@ -27,7 +27,7 @@ class _LoginViewState extends State<LoginView> {
   /// Contas de demonstração do MVP (exibidas apenas em desenvolvimento).
   static const _demo = [
     ('admin@intuitivecare.com.br', 'Admin@2025', 'Administrador', LucideIcons.shieldCheck),
-    ('consumidor@intuitivecare.com.br', 'Consulta@2025', 'Consumidor', LucideIcons.eye),
+    ('colaborador@intuitivecare.com.br', 'Colaborador@2025', 'Colaborador', LucideIcons.eye),
   ];
 
   @override
@@ -91,15 +91,23 @@ class _LoginViewState extends State<LoginView> {
           children: [
             Row(
               children: [
-                TextButton.icon(
-                  onPressed: () => context.go('/'),
-                  icon: const Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
-                  label: Text('Página inicial', style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: () => context.go('/'),
+                    icon: const Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
+                    label: Text('Página inicial',
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
+                  ),
                 ),
                 const Spacer(),
-                TextButton(
-                  onPressed: () => abrirNovaAba('design-system.html'),
-                  child: Text('Design System', style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
+                Flexible(
+                  child: TextButton(
+                    onPressed: () => abrirNovaAba('design-system.html'),
+                    child: Text('Design System',
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
+                  ),
                 ),
               ],
             ),

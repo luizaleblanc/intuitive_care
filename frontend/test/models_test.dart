@@ -67,7 +67,7 @@ void main() {
       expect(op.toJson()['registro_ans'], '326305');
     });
 
-    test('PainelModel lê visões Admin e Consumidor', () {
+    test('PainelModel lê visões Admin e Colaborador', () {
       final p = PainelModel.fromJson({
         'periodo': {'ano': 2026, 'trimestre': 2},
         'periodos': [
@@ -88,7 +88,7 @@ void main() {
             {'modalidade': 'Cooperativa Médica', 'valor': 23.6e9, 'pct': 31.4},
           ],
         },
-        'consumidor': {
+        'colaborador': {
           'despesas_mh': 73.9e9,
           'sinistralidade': 0.752,
           'beneficiarios': 53004799,

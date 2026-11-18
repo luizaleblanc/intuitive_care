@@ -26,7 +26,7 @@ class _OperadorasViewState extends State<OperadorasView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<OperadorasViewModel>().carregar(search: widget.buscaInicial ?? '', resumo: true);
-      context.read<ShellActions>().registrarExportacao(_exportarCsv);
+      context.read<ShellActions>().registrarExportacao(() => _exportar());
     });
   }
 
@@ -44,9 +44,10 @@ class _OperadorasViewState extends State<OperadorasView> {
     super.deactivate();
   }
 
-  Future<void> _exportarCsv() async {
+  /// Sem [formato], usa a preferência "Exportar como" do perfil; o botão "Exportar CSV" força CSV.
+  Future<void> _exportar({String? formato}) async {
     final vm = context.read<OperadorasViewModel>();
-    final formato = context.read<AuthViewModel>().currentUser?.preferencias.formatoExportacao ?? 'CSV';
+    formato ??= context.read<AuthViewModel>().currentUser?.preferencias.formatoExportacao ?? 'CSV';
     try {
       final linhas = await vm.exportar();
       if (linhas.isEmpty) return;
@@ -150,11 +151,14 @@ class _OperadorasViewState extends State<OperadorasView> {
                     const SizedBox(width: 12),
                     Text('${fmtInt(vm.total)} resultado(s)', style: AppText.sans(14, color: AppColors.muted)),
                     const Spacer(),
-                    if (isAdmin)
-                      AppButton('Nova operadora', icon: LucideIcons.plus, onPressed: () => _abrir(null))
-                    else
-                      AppButton('Exportar CSV',
-                          variant: ButtonVariant.accent, icon: LucideIcons.download, onPressed: _exportarCsv),
+                    AppButton('Exportar CSV',
+                        variant: isAdmin ? ButtonVariant.secondary : ButtonVariant.accent,
+                        icon: LucideIcons.download,
+                        onPressed: () => _exportar(formato: 'CSV')),
+                    if (isAdmin) ...[
+                      const SizedBox(width: 8),
+                      AppButton('Nova operadora', icon: LucideIcons.plus, onPressed: () => _abrir(null)),
+                    ],
                   ],
                 ),
               ),

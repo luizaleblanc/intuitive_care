@@ -12,7 +12,7 @@ import '../shared/utils/formatters.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/painel_viewmodel.dart';
 
-/// Ações da Topbar registradas pela página ativa (ex.: "Exportar" do Consumidor).
+/// Ações da Topbar registradas pela página ativa (ex.: "Exportar" do Colaborador).
 class ShellActions extends ChangeNotifier {
   Future<void> Function()? _exportar;
   Future<void> Function()? get exportar => _exportar;
@@ -203,8 +203,8 @@ class _TopbarState extends State<_Topbar> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthViewModel>().currentUser;
     final acoes = context.watch<ShellActions>();
-    final isAdmin = user?.isAdmin ?? false;
-    final mostrarExportar = !isAdmin && widget.pagina.rota != '/perfil' && acoes.exportar != null;
+    // Exportação disponível para Administrador e Colaborador (exceto na tela de Perfil).
+    final mostrarExportar = widget.pagina.rota != '/perfil' && acoes.exportar != null;
 
     var subtitulo = widget.pagina.subtitulo;
     if (widget.pagina.rota == '/painel') {

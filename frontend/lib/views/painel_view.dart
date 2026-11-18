@@ -24,7 +24,9 @@ class GridRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = Row(
-      crossAxisAlignment: mesmaAltura ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
+      crossAxisAlignment: mesmaAltura
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < cols.length; i++) ...[
           if (i > 0) const SizedBox(width: AppLayout.gutter),
@@ -52,7 +54,9 @@ class _PainelViewState extends State<PainelView> {
       final vm = context.read<PainelViewModel>();
       if (user != null && !user.isAdmin) {
         vm.aplicarPreferencias(
-            ufPadrao: user.preferencias.ufPadrao, trimestrePadrao: user.preferencias.trimestrePadrao);
+          ufPadrao: user.preferencias.ufPadrao,
+          trimestrePadrao: user.preferencias.trimestrePadrao,
+        );
         final ops = context.read<OperadorasViewModel>();
         if (ops.resumo.ufs.isEmpty) ops.carregar(resumo: true);
       }
@@ -73,43 +77,79 @@ class _PainelViewState extends State<PainelView> {
     if (p == null || user == null) return;
     final periodo = fmtPeriodo(p.periodo.ano, p.periodo.trimestre);
     final vm = context.read<PainelViewModel>();
-    final linhas = <List<String>>[
-      ['Indicador', 'Despesas médico-hospitalares', fmtBi(p.despesasMh)],
-      ['Indicador', 'Sinistralidade média', p.sinistralidade == null ? '—' : fmtPct(p.sinistralidade! * 100)],
-      ['Indicador', 'Beneficiários cobertos', fmtInt(p.beneficiarios)],
-      ['Indicador', 'Ticket médio por vida (trimestre)', p.ticketMedio == null ? '—' : fmtReais(p.ticketMedio!)],
-      for (var i = 0; i < p.ranking.length; i++)
-        ['Ranking ${i + 1}', '${p.ranking[i].nome} (${p.ranking[i].uf})', fmtBi(p.ranking[i].valor)],
-      for (final s in p.serieConsumidor)
-        ['Série', fmtPeriodo(s.ano, s.trimestre), fmtBi(s.valor)],
-    ];
+    final linhas = user.isAdmin
+        ? <List<String>>[
+            [
+              'Indicador',
+              'Total de despesas processadas',
+              fmtBi(p.totalDespesas),
+            ],
+            [
+              'Indicador',
+              'Registros extraídos da ANS',
+              fmtInt(p.registrosExtraidos),
+            ],
+            ['Indicador', 'Operadoras ativas', fmtInt(p.operadorasAtivas)],
+            for (final m in p.modalidades)
+              ['Modalidade', m.modalidade, fmtPct(m.pct)],
+            for (final s in p.serieAdmin)
+              ['Série', fmtPeriodo(s.ano, s.trimestre), fmtBi(s.valor)],
+          ]
+        : <List<String>>[
+            ['Indicador', 'Despesas médico-hospitalares', fmtBi(p.despesasMh)],
+            [
+              'Indicador',
+              'Sinistralidade média',
+              p.sinistralidade == null ? '—' : fmtPct(p.sinistralidade! * 100),
+            ],
+            ['Indicador', 'Beneficiários cobertos', fmtInt(p.beneficiarios)],
+            [
+              'Indicador',
+              'Ticket médio por vida (trimestre)',
+              p.ticketMedio == null ? '—' : fmtReais(p.ticketMedio!),
+            ],
+            for (var i = 0; i < p.ranking.length; i++)
+              [
+                'Ranking ${i + 1}',
+                '${p.ranking[i].nome} (${p.ranking[i].uf})',
+                fmtBi(p.ranking[i].valor),
+              ],
+            for (final s in p.serieColaborador)
+              ['Série', fmtPeriodo(s.ano, s.trimestre), fmtBi(s.valor)],
+          ];
     final nome = await Exporter.exportar(
       ExportTable(
         titulo: 'Painel Geral · $periodo',
-        subtitulo: 'UF: ${vm.uf.isEmpty ? 'Todas' : vm.uf} · Modalidade: ${vm.modalidade.isEmpty ? 'Todas' : vm.modalidade}',
+        subtitulo:
+            'UF: ${vm.uf.isEmpty ? 'Todas' : vm.uf} · Modalidade: ${vm.modalidade.isEmpty ? 'Todas' : vm.modalidade}',
         colunas: const ['Tipo', 'Descrição', 'Valor'],
         linhas: linhas,
       ),
       nomeBase: 'painel_${p.periodo.ano}_${p.periodo.trimestre}tri',
       formato: user.preferencias.formatoExportacao,
     );
-    if (mounted) context.read<ToastController>().show('Relatório exportado ($nome)');
+    if (mounted) {
+      context.read<ToastController>().show('Relatório exportado ($nome)');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = context.watch<AuthViewModel>().currentUser?.isAdmin ?? false;
+    final isAdmin =
+        context.watch<AuthViewModel>().currentUser?.isAdmin ?? false;
     final vm = context.watch<PainelViewModel>();
     final p = vm.painel;
 
     if (p == null) {
-      if (vm.error != null) return ErrorBox(vm.error!, onRetry: () => vm.carregar());
+      if (vm.error != null) {
+        return ErrorBox(vm.error!, onRetry: () => vm.carregar());
+      }
       return const LoadingBlock(label: 'Carregando painel...');
     }
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
       opacity: vm.isLoading ? 0.6 : 1,
-      child: isAdmin ? _PainelAdmin(p) : _PainelConsumidor(p, vm),
+      child: isAdmin ? _PainelAdmin(p) : _PainelColaborador(p, vm),
     );
   }
 }
@@ -123,8 +163,12 @@ class _PainelAdmin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final serie = p.serieAdmin.length > 8 ? p.serieAdmin.sublist(p.serieAdmin.length - 8) : p.serieAdmin;
-    final crescimento = serie.length >= 2 ? variation(serie.last.valor, serie.first.valor) : null;
+    final serie = p.serieAdmin.length > 8
+        ? p.serieAdmin.sublist(p.serieAdmin.length - 8)
+        : p.serieAdmin;
+    final crescimento = serie.length >= 2
+        ? variation(serie.last.valor, serie.first.valor)
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -133,31 +177,36 @@ class _PainelAdmin extends StatelessWidget {
             4,
             KpiCard(
               dark: true,
-              label: 'Total de despesas processadas · ${fmtPeriodo(p.periodo.ano, p.periodo.trimestre)}',
+              label:
+                  'Total de despesas processadas · ${fmtPeriodo(p.periodo.ano, p.periodo.trimestre)}',
               value: fmtBi(p.totalDespesas),
               delta: variation(p.totalDespesas, p.totalDespesasAnterior),
               foot: 'vs último trimestre',
               icon: LucideIcons.wallet,
-            )
+            ),
           ),
           (
             4,
             KpiCard(
               label: 'Registros extraídos da ANS',
               value: fmtInt(p.registrosExtraidos),
-              delta: variation(p.registrosExtraidos, p.registrosExtraidosAnterior),
+              delta: variation(
+                p.registrosExtraidos,
+                p.registrosExtraidosAnterior,
+              ),
               foot: 'linhas no último lote',
               icon: LucideIcons.database,
-            )
+            ),
           ),
           (
             4,
             KpiCard(
               label: 'Operadoras ativas',
               value: fmtInt(p.operadorasAtivas),
-              foot: 'cadastro CADOP · ${fmtInt(p.operadorasComDemonstracao)} com demonstração',
+              foot:
+                  'cadastro CADOP · ${fmtInt(p.operadorasComDemonstracao)} com demonstração',
               icon: LucideIcons.building2,
-            )
+            ),
           ),
         ]),
         const SizedBox(height: AppLayout.gutter),
@@ -170,21 +219,34 @@ class _PainelAdmin extends StatelessWidget {
                 children: [
                   CardHeader(
                     'Evolução de despesas assistenciais',
-                    subtitle: 'Eventos indenizáveis líquidos · R\$ bilhões por trimestre',
+                    subtitle:
+                        'Eventos indenizáveis líquidos · R\$ bilhões por trimestre',
                     trailing: crescimento == null
                         ? null
-                        : Pill('${fmtDelta(crescimento)} em ${serie.length} trimestres',
-                            tone: crescimento >= 0 ? PillTone.ok : PillTone.danger,
-                            icon: crescimento >= 0 ? LucideIcons.arrowUpRight : LucideIcons.arrowDownRight),
+                        : Pill(
+                            '${fmtDelta(crescimento)} em ${serie.length} trimestres',
+                            tone: crescimento >= 0
+                                ? PillTone.ok
+                                : PillTone.danger,
+                            icon: crescimento >= 0
+                                ? LucideIcons.arrowUpRight
+                                : LucideIcons.arrowDownRight,
+                          ),
                   ),
                   const SizedBox(height: 24),
                   PillBarChart(
                     height: 260,
-                    data: [for (final s in serie) BarDatum(fmtPeriodoCurto(s.ano, s.trimestre), s.valor / 1e9)],
+                    data: [
+                      for (final s in serie)
+                        BarDatum(
+                          fmtPeriodoCurto(s.ano, s.trimestre),
+                          s.valor / 1e9,
+                        ),
+                    ],
                   ),
                 ],
               ),
-            )
+            ),
           ),
           (4, _DonutModalidades(p)),
         ], mesmaAltura: false),
@@ -202,8 +264,10 @@ class _DonutModalidades extends StatelessWidget {
     final top = p.modalidades.take(4).toList();
     final resto = p.modalidades.skip(4).fold<double>(0, (s, m) => s + m.pct);
     final fatias = [
-      for (var i = 0; i < top.length; i++) DonutSlice(top[i].modalidade, top[i].pct, AppColors.chart[i]),
-      if (resto > 0) DonutSlice('Outras modalidades', resto, AppColors.chart[4]),
+      for (var i = 0; i < top.length; i++)
+        DonutSlice(top[i].modalidade, top[i].pct, AppColors.chart[i]),
+      if (resto > 0)
+        DonutSlice('Outras modalidades', resto, AppColors.chart[4]),
     ];
     return AppCard(
       color: AppColors.sage,
@@ -218,15 +282,31 @@ class _DonutModalidades extends StatelessWidget {
             trailing: Container(
               width: 32,
               height: 32,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.6), shape: BoxShape.circle),
-              child: const Icon(LucideIcons.chartPie, size: 15, color: AppColors.forest),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                LucideIcons.chartPie,
+                size: 15,
+                color: AppColors.forest,
+              ),
             ),
           ),
-          Text('Participação nas despesas do trimestre',
-              style: AppText.sans(12, color: AppColors.forest.withValues(alpha: 0.75))),
+          Text(
+            'Participação nas despesas do trimestre',
+            style: AppText.sans(
+              12,
+              color: AppColors.forest.withValues(alpha: 0.75),
+            ),
+          ),
           const SizedBox(height: 16),
           Center(
-            child: Donut(data: fatias, center: fmtInt(p.operadorasComDemonstracao), sub: 'operadoras'),
+            child: Donut(
+              data: fatias,
+              center: fmtInt(p.operadorasComDemonstracao),
+              sub: 'operadoras',
+            ),
           ),
           const SizedBox(height: 20),
           for (final f in fatias)
@@ -240,15 +320,27 @@ class _DonutModalidades extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: f.color,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.forest.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: AppColors.forest.withValues(alpha: 0.2),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(f.label,
-                        overflow: TextOverflow.ellipsis, style: AppText.sans(14, color: AppColors.forest)),
+                    child: Text(
+                      f.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.sans(14, color: AppColors.forest),
+                    ),
                   ),
-                  Text(fmtPct(f.pct), style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.forest)),
+                  Text(
+                    fmtPct(f.pct),
+                    style: AppText.sans(
+                      14,
+                      weight: FontWeight.w600,
+                      color: AppColors.forest,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -259,19 +351,20 @@ class _DonutModalidades extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Consumidor
+// Colaborador
 // ---------------------------------------------------------------------------
-class _PainelConsumidor extends StatelessWidget {
+class _PainelColaborador extends StatelessWidget {
   final PainelModel p;
   final PainelViewModel vm;
-  const _PainelConsumidor(this.p, this.vm);
+  const _PainelColaborador(this.p, this.vm);
 
   @override
   Widget build(BuildContext context) {
     final resumo = context.watch<OperadorasViewModel>().resumo;
     final periodo = fmtPeriodo(p.periodo.ano, p.periodo.trimestre);
-    final serie =
-        p.serieConsumidor.length > 8 ? p.serieConsumidor.sublist(p.serieConsumidor.length - 8) : p.serieConsumidor;
+    final serie = p.serieColaborador.length > 8
+        ? p.serieColaborador.sublist(p.serieColaborador.length - 8)
+        : p.serieColaborador;
     final ufs = {...resumo.ufs, if (vm.uf.isNotEmpty) vm.uf}.toList()..sort();
 
     return Column(
@@ -283,7 +376,10 @@ class _PainelConsumidor extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text('Filtros', style: AppText.sans(14, weight: FontWeight.w600)),
+                child: Text(
+                  'Filtros',
+                  style: AppText.sans(14, weight: FontWeight.w600),
+                ),
               ),
               const SizedBox(width: 4),
               AppSelect<String>(
@@ -306,7 +402,10 @@ class _PainelConsumidor extends StatelessWidget {
                 semanticLabel: 'Trimestre',
                 icon: LucideIcons.calendar,
                 value: p.periodo.trimestre,
-                options: [for (final t in vm.trimestresDoAno(p.periodo.ano)) (t, fmtTrimestre(t))],
+                options: [
+                  for (final t in vm.trimestresDoAno(p.periodo.ano))
+                    (t, fmtTrimestre(t)),
+                ],
                 onChanged: (v) => vm.carregar(trimestre: v),
               ),
               const SizedBox(width: 12),
@@ -315,14 +414,20 @@ class _PainelConsumidor extends StatelessWidget {
                   semanticLabel: 'Modalidade',
                   icon: LucideIcons.layers,
                   value: vm.modalidade,
-                  options: [('', 'Todas modalidades'), for (final m in resumo.modalidades) (m, m)],
+                  options: [
+                    ('', 'Todas modalidades'),
+                    for (final m in resumo.modalidades) (m, m),
+                  ],
                   onChanged: (v) => vm.carregar(modalidade: v),
                 ),
               ),
               const Spacer(),
               const Icon(LucideIcons.lock, size: 13, color: AppColors.muted),
               const SizedBox(width: 8),
-              Text('Modo consulta · somente leitura', style: AppText.sans(12, color: AppColors.caption)),
+              Text(
+                'Modo consulta · somente leitura',
+                style: AppText.sans(12, color: AppColors.caption),
+              ),
             ],
           ),
         ),
@@ -337,17 +442,19 @@ class _PainelConsumidor extends StatelessWidget {
               delta: variation(p.despesasMh, p.despesasMhAnterior),
               foot: 'vs trimestre anterior',
               icon: LucideIcons.stethoscope,
-            )
+            ),
           ),
           (
             3,
             KpiCard(
               label: 'Sinistralidade média',
-              value: p.sinistralidade == null ? '—' : fmtPct(p.sinistralidade! * 100),
+              value: p.sinistralidade == null
+                  ? '—'
+                  : fmtPct(p.sinistralidade! * 100),
               delta: variation(p.sinistralidade, p.sinistralidadeAnterior),
               foot: 'eventos / contraprestações',
               icon: LucideIcons.percent,
-            )
+            ),
           ),
           (
             3,
@@ -357,7 +464,7 @@ class _PainelConsumidor extends StatelessWidget {
               delta: variation(p.beneficiarios, p.beneficiariosAnterior),
               foot: 'planos médico-hospitalares',
               icon: LucideIcons.users,
-            )
+            ),
           ),
           (
             3,
@@ -367,7 +474,7 @@ class _PainelConsumidor extends StatelessWidget {
               delta: variation(p.ticketMedio, p.ticketMedioAnterior),
               foot: 'por trimestre',
               icon: LucideIcons.heartPulse,
-            )
+            ),
           ),
         ]),
         const SizedBox(height: AppLayout.gutter),
@@ -387,11 +494,17 @@ class _PainelConsumidor extends StatelessWidget {
                   const SizedBox(height: 24),
                   PillBarChart(
                     height: 240,
-                    data: [for (final s in serie) BarDatum(fmtPeriodoCurto(s.ano, s.trimestre), s.valor / 1e9)],
+                    data: [
+                      for (final s in serie)
+                        BarDatum(
+                          fmtPeriodoCurto(s.ano, s.trimestre),
+                          s.valor / 1e9,
+                        ),
+                    ],
                   ),
                 ],
               ),
-            )
+            ),
           ),
         ], mesmaAltura: false),
       ],
@@ -411,11 +524,16 @@ class _Ranking extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CardHeader('Maiores operadoras por despesa',
-              trailing: Pill(uf.isEmpty ? 'Todas UFs' : uf, tone: PillTone.sage)),
+          CardHeader(
+            'Maiores operadoras por despesa',
+            trailing: Pill(uf.isEmpty ? 'Todas UFs' : uf, tone: PillTone.sage),
+          ),
           const SizedBox(height: 20),
           if (itens.isEmpty)
-            Text('Nenhuma operadora com despesa para este recorte.', style: AppText.sans(14, color: AppColors.muted)),
+            Text(
+              'Nenhuma operadora com despesa para este recorte.',
+              style: AppText.sans(14, color: AppColors.muted),
+            ),
           for (var i = 0; i < itens.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -423,7 +541,14 @@ class _Ranking extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 20,
-                    child: Text('${i + 1}', style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.muted)),
+                    child: Text(
+                      '${i + 1}',
+                      style: AppText.sans(
+                        14,
+                        weight: FontWeight.w700,
+                        color: AppColors.muted,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -433,17 +558,30 @@ class _Ranking extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: Text(nomeProprio(itens[i].nome),
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppText.sans(14, weight: FontWeight.w600)),
+                              child: Text(
+                                nomeProprio(itens[i].nome),
+                                overflow: TextOverflow.ellipsis,
+                                style: AppText.sans(
+                                  14,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 8),
-                            Text(fmtBi(itens[i].valor),
-                                style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.forest)),
+                            Text(
+                              fmtBi(itens[i].valor),
+                              style: AppText.sans(
+                                14,
+                                weight: FontWeight.w600,
+                                color: AppColors.forest,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        ProgressBar(fraction: maxV == 0 ? 0 : itens[i].valor / maxV),
+                        ProgressBar(
+                          fraction: maxV == 0 ? 0 : itens[i].valor / maxV,
+                        ),
                       ],
                     ),
                   ),
