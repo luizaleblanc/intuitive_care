@@ -34,6 +34,8 @@ class _Pagina {
 
 const _paginas = [
   _Pagina('/painel', 'Painel Geral', 'Dashboard ANS & ETL', LucideIcons.layoutDashboard, 'Painel Geral'),
+  _Pagina('/explorar', 'Explorar dados', 'Período, filtros avançados e gráficos personalizados',
+      LucideIcons.chartNoAxesCombined, 'Explorar dados'),
   _Pagina('/operadoras', 'Operadoras ANS', 'Catálogo de operadoras com registro na ANS', LucideIcons.building2,
       'Operadoras ANS'),
   _Pagina('/despesas', 'Despesas Contábeis', 'Demonstrações contábeis e despesas assistenciais', LucideIcons.receipt,
@@ -116,9 +118,9 @@ class _Sidebar extends StatelessWidget {
               ),
             ),
             _grupo('MENU', [
-              for (final p in _paginas.take(3)) _Item(pagina: p, ativa: ativa == p.rota),
+              for (final p in _paginas.where((p) => p.rota != '/perfil')) _Item(pagina: p, ativa: ativa == p.rota),
             ]),
-            _grupo('CONTA', [_Item(pagina: _paginas[3], ativa: ativa == _paginas[3].rota)]),
+            _grupo('CONTA', [_Item(pagina: _paginas.last, ativa: ativa == _paginas.last.rota)]),
           ],
         ),
       );

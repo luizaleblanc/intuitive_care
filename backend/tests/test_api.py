@@ -348,6 +348,47 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
                     {"a": ano, "t": tri},
                 )
 
+    def test_explorar_periodo_facetas_e_perfis(self):
+        self._seed_analitico()
+        admin = self._auth_headers(self._login_demo())
+        colab = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))
+
+        r = self.client.get("/api/explorar?ano_inicio=2026&ano_fim=2026&granularidade=trimestre", headers=admin)
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertEqual(d["kpis"]["despesas"], 210.0)
+        self.assertEqual(d["kpis"]["receitas"], 290.0)
+        self.assertAlmostEqual(d["kpis"]["sinistralidade"], 72.41, places=2)
+        self.assertEqual([(s["ano"], s["trimestre"]) for s in d["serie"]], [(2026, 1), (2026, 2)])
+        self.assertEqual(d["operadoras"][0]["registro_ans"], "326305")
+
+        anual = self.client.get("/api/explorar?granularidade=ano", headers=admin).get_json()
+        self.assertEqual(len(anual["serie"]), 1)
+        self.assertIsNone(anual["serie"][0]["trimestre"])
+
+        vazio = self.client.get("/api/explorar?modalidade=Cooperativa%20M%C3%A9dica", headers=admin).get_json()
+        self.assertEqual(vazio["kpis"]["operadoras"], 0)
+        filtrado = self.client.get("/api/explorar?uf=SP&faixa_despesa=ate_10mi", headers=admin).get_json()
+        self.assertEqual(filtrado["kpis"]["operadoras"], 1)
+
+        comp = self.client.get("/api/explorar?comparar=1", headers=admin).get_json()
+        self.assertIsNone(comp["comparativo"]["kpis"])
+
+        self.assertEqual(self.client.get("/api/explorar?ano_inicio=2027&ano_fim=2026", headers=admin).status_code, 400)
+        self.assertEqual(self.client.get("/api/explorar?porte=gigante", headers=admin).status_code, 400)
+        self.assertEqual(colab_status := self.client.get("/api/explorar?status=Inativa", headers=colab).status_code, 200)
+        self.assertEqual(self.client.get("/api/explorar", headers=colab).get_json()["facetas"]["status"], ["Ativa"])
+
+    def test_preferencia_graficos_explorar(self):
+        h = self._auth_headers(self._login_demo())
+        ok = self.client.put("/api/auth/me", json={"preferencias": {"graficos_explorar": [
+            {"tipo": "trend_area", "metrica": "sinistralidade"}]}}, headers=h)
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(ok.get_json()["usuario"]["preferencias"]["graficos_explorar"][0]["tipo"], "trend_area")
+        ruim = self.client.put("/api/auth/me", json={"preferencias": {"graficos_explorar": [
+            {"tipo": "pizza3d", "metrica": "despesas"}]}}, headers=h)
+        self.assertEqual(ruim.status_code, 400)
+
     def test_colaborador_somente_leitura(self):
         token = self._login("colaborador@intuitivecare.com.br", "Colaborador@2025")
         h = self._auth_headers(token)

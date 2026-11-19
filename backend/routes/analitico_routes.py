@@ -2,6 +2,7 @@ from flask import Blueprint, g, jsonify, request
 
 from backend.routes.decorators import permissao_required, token_required
 from backend.services.analitico_service import AnaliticoService
+from backend.services.explorar_service import ExplorarService
 from backend.services.validators import BusinessRuleError
 
 analitico_bp = Blueprint("analitico", __name__, url_prefix="/api")
@@ -53,3 +54,11 @@ def contas():
 @permissao_required("lotes.auditar")
 def auditar_lote(ano: int, trimestre: int):
     return jsonify(AnaliticoService.auditar_lote(ano, trimestre, g.current_user.nome)), 200
+
+
+@analitico_bp.route("/explorar", methods=["GET"])
+@token_required
+@permissao_required("painel.ver")
+def explorar():
+    resultado = ExplorarService.explorar(request.args, ver_inativas=g.current_user.pode("operadoras.ver_inativas"))
+    return jsonify(resultado), 200

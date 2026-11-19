@@ -16,7 +16,7 @@ from backend.config import Config
 from backend.models.usuario_model import PREFERENCIAS_PADRAO, Usuario
 from backend.repositories.usuario_repository import UsuarioRepository
 from backend.services.email_service import EmailService
-from backend.services.validators import BusinessRuleError, validate_email, validate_password
+from backend.services.validators import BusinessRuleError, validar_graficos, validate_email, validate_password
 
 
 RESET_MAX_PEDIDOS = 3
@@ -212,6 +212,8 @@ class AuthService:
                 raise BusinessRuleError("Formato de exportação inválido.", 400)
             if limpas.get("trimestre_padrao") not in (None, 1, 2, 3, 4):
                 raise BusinessRuleError("Trimestre padrão inválido.", 400)
+            if "graficos_explorar" in limpas:
+                limpas["graficos_explorar"] = validar_graficos(limpas["graficos_explorar"])
             atual = UsuarioRepository.find_by_id(user_id) or {}
             base = Usuario.from_row(atual).preferencias if atual else dict(PREFERENCIAS_PADRAO)
             base.update(limpas)

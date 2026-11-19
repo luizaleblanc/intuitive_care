@@ -7,8 +7,9 @@ class ApiConfig {
   static const String _envApiUrl = String.fromEnvironment('API_URL');
 
   static String get baseUrl {
-    if (_envApiUrl.isNotEmpty) {
-      return _envApiUrl;
+    final definida = normalizarApiUrl(_envApiUrl);
+    if (definida.isNotEmpty) {
+      return definida;
     }
     // No emulador Android, localhost aponta para o próprio dispositivo;
     // 10.0.2.2 redireciona para a máquina host onde o Flask está rodando.
@@ -25,4 +26,15 @@ class ApiConfig {
     }
     return 'http://localhost:5000/api';
   }
+}
+
+/// Corrige erros comuns ao cadastrar API_URL: espaços, barra final e o endereço colado duas vezes.
+String normalizarApiUrl(String bruto) {
+  var url = bruto.trim();
+  final ultimo = url.lastIndexOf('http');
+  if (ultimo > 0) url = url.substring(ultimo);
+  while (url.endsWith('/')) {
+    url = url.substring(0, url.length - 1);
+  }
+  return url;
 }

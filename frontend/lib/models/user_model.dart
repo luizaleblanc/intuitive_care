@@ -9,6 +9,9 @@ class PreferenciasModel {
   final bool resumoSemanal;
   final bool alertaNovosDados;
 
+  /// Layout salvo da tela Explorar (lista de {tipo, metrica}); null = padrão.
+  final List<Map<String, dynamic>>? graficosExplorar;
+
   const PreferenciasModel({
     this.idioma = 'pt-BR',
     this.formatoData = 'DD/MM/AAAA',
@@ -18,6 +21,7 @@ class PreferenciasModel {
     this.tema = 'claro',
     this.resumoSemanal = true,
     this.alertaNovosDados = true,
+    this.graficosExplorar,
   });
 
   factory PreferenciasModel.fromJson(Map<String, dynamic>? json) {
@@ -31,6 +35,9 @@ class PreferenciasModel {
       tema: (json['tema'] ?? 'claro').toString(),
       resumoSemanal: json['resumo_semanal'] != false,
       alertaNovosDados: json['alerta_novos_dados'] != false,
+      graficosExplorar: json['graficos_explorar'] is List
+          ? [for (final g in json['graficos_explorar'] as List) if (g is Map) Map<String, dynamic>.from(g)]
+          : null,
     );
   }
 
@@ -43,6 +50,7 @@ class PreferenciasModel {
         'tema': tema,
         'resumo_semanal': resumoSemanal,
         'alerta_novos_dados': alertaNovosDados,
+        if (graficosExplorar != null) 'graficos_explorar': graficosExplorar,
       };
 
   PreferenciasModel copyWith({
@@ -64,6 +72,7 @@ class PreferenciasModel {
         tema: tema ?? this.tema,
         resumoSemanal: resumoSemanal ?? this.resumoSemanal,
         alertaNovosDados: alertaNovosDados ?? this.alertaNovosDados,
+        graficosExplorar: graficosExplorar,
       );
 }
 

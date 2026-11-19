@@ -21,6 +21,9 @@ class AnaliticoService {
         'grupo': grupo,
       }) as Map);
 
+  Future<Map<String, dynamic>> fetchExplorar(Map<String, String> consulta) async =>
+      Map<String, dynamic>.from(await _client.get('/explorar', query: consulta) as Map);
+
   Future<Map<String, dynamic>> auditarLote(int ano, int trimestre) async =>
       Map<String, dynamic>.from(await _client.post('/contas/lotes/$ano/$trimestre/auditar') as Map);
 }

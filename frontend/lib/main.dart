@@ -19,6 +19,7 @@ import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/contas_viewmodel.dart';
 import 'viewmodels/operadoras_viewmodel.dart';
 import 'viewmodels/painel_viewmodel.dart';
+import 'viewmodels/explorar_viewmodel.dart';
 import 'views/app_shell.dart';
 
 Future<void> main() async {
@@ -66,6 +67,7 @@ class _IntuitiveCareAppState extends State<IntuitiveCareApp> {
   late final _painel = PainelViewModel(widget.analiticoRepository);
   late final _operadoras = OperadorasViewModel(widget.operadoraRepository);
   late final _contas = ContasViewModel(widget.analiticoRepository);
+  late final _explorar = ExplorarViewModel(widget.analiticoRepository);
   final _toast = ToastController();
   final _shell = ShellActions();
   String? _usuarioAnterior;
@@ -93,6 +95,7 @@ class _IntuitiveCareAppState extends State<IntuitiveCareApp> {
         ChangeNotifierProvider.value(value: _painel),
         ChangeNotifierProvider.value(value: _operadoras),
         ChangeNotifierProvider.value(value: _contas),
+        ChangeNotifierProvider.value(value: _explorar),
         ChangeNotifierProvider.value(value: _toast),
         ChangeNotifierProvider.value(value: _shell),
       ],

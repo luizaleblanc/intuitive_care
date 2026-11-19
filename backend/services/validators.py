@@ -110,3 +110,21 @@ def validate_valor_despesa(valor) -> float:
     if amount <= 0:
         raise BusinessRuleError("O valor da despesa deve ser maior que zero.", 400)
     return round(amount, 2)
+
+
+TIPOS_GRAFICO = ("pill_bar", "donut_sage", "trend_area", "horizontal_ranking")
+METRICAS_GRAFICO = ("despesas", "receitas", "sinistralidade", "beneficiarios")
+
+
+def validar_graficos(graficos):
+    """Layout de gráficos da tela Explorar salvo nas preferências (até 8 cartões)."""
+    if graficos is None:
+        return None
+    if not isinstance(graficos, list) or len(graficos) > 8:
+        raise BusinessRuleError("Configuração de gráficos inválida (máximo de 8).", 400)
+    limpos = []
+    for g in graficos:
+        if not isinstance(g, dict) or g.get("tipo") not in TIPOS_GRAFICO or g.get("metrica") not in METRICAS_GRAFICO:
+            raise BusinessRuleError("Tipo de gráfico ou métrica inválida.", 400)
+        limpos.append({"tipo": g["tipo"], "metrica": g["metrica"]})
+    return limpos

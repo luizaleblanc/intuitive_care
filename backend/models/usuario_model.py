@@ -16,6 +16,7 @@ PREFERENCIAS_PADRAO: Dict[str, Any] = {
     "tema": "claro",
     "resumo_semanal": True,
     "alerta_novos_dados": True,
+    "graficos_explorar": None,
 }
 
 

@@ -5,6 +5,7 @@ import '../shared/ui/ui.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../views/app_shell.dart';
 import '../views/despesas_view.dart';
+import '../views/explorar_view.dart';
 import '../views/home_view.dart';
 import '../views/login_view.dart';
 import '../views/operadoras_view.dart';
@@ -50,6 +51,7 @@ GoRouter buildRouter(AuthViewModel auth) => GoRouter(
           ),
           routes: [
             GoRoute(path: '/painel', pageBuilder: (_, s) => _fade(s, const PainelView())),
+            GoRoute(path: '/explorar', pageBuilder: (_, s) => _fade(s, const ExplorarView())),
             GoRoute(
               path: '/operadoras',
               pageBuilder: (_, s) => _fade(s, OperadorasView(buscaInicial: s.uri.queryParameters['q'])),

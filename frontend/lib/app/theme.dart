@@ -82,6 +82,10 @@ abstract final class AppText {
           {FontWeight weight = FontWeight.w400, Color color = AppColors.ink, double? height, double? spacing}) =>
       GoogleFonts.inter(fontSize: size, fontWeight: weight, color: color, height: height, letterSpacing: spacing);
 
+  /// Números financeiros, percentuais e anos: algarismos tabulares (mesma largura).
+  static TextStyle numeric(double size, {FontWeight weight = FontWeight.w600, Color color = AppColors.ink}) =>
+      sans(size, weight: weight, color: color).copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
+
   static TextStyle mono(double size, {FontWeight weight = FontWeight.w600, Color color = AppColors.forest}) =>
       GoogleFonts.jetBrainsMono(fontSize: size, fontWeight: weight, color: color);
 
