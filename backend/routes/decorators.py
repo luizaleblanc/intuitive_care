@@ -3,6 +3,7 @@ from typing import Any, Dict
 
 from flask import g, request
 
+from backend.models.permissoes import PERMISSOES
 from backend.services.auth_service import AuthService
 from backend.services.validators import BusinessRuleError
 
@@ -31,14 +32,19 @@ def token_required(fn):
     return wrapper
 
 
-def admin_required(fn):
-    """Exige perfil ADMIN. Usar abaixo de @token_required."""
+def permissao_required(permissao: str):
+    """Exige a permissão (ver backend/models/permissoes.py). Usar abaixo de @token_required."""
+    if permissao not in PERMISSOES:
+        raise KeyError(f"Permissão desconhecida: {permissao}")
 
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        user = getattr(g, "current_user", None)
-        if user is None or user.perfil != "ADMIN":
-            raise BusinessRuleError("Ação permitida apenas para o perfil Administrador.", 403)
-        return fn(*args, **kwargs)
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            user = getattr(g, "current_user", None)
+            if user is None or not user.pode(permissao):
+                raise BusinessRuleError("Ação permitida apenas para o perfil Administrador.", 403)
+            return fn(*args, **kwargs)
 
-    return wrapper
+        return wrapper
+
+    return decorator

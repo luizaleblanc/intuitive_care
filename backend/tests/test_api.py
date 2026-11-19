@@ -358,6 +358,20 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
             self.client.patch("/api/operadoras/326305/status", json={"status": "Inativa"}, headers=h).status_code, 403
         )
         self.assertEqual(self.client.delete("/api/operadoras/326305", headers=h).status_code, 403)
+        self.assertIn("dados.exportar", me["permissoes"])
+        self.assertNotIn("operadoras.criar", me["permissoes"])
+
+    def test_regras_de_perfil_gravadas_no_banco(self):
+        from backend.models.permissoes import PERMISSOES
+
+        with get_connection() as conn:
+            linhas = conn.execute(text("SELECT perfil, permissao FROM permissoes_perfil")).all()
+            perfis = {r[0] for r in conn.execute(text("SELECT perfil FROM perfis_acesso")).all()}
+        esperado = {(p, c) for c, (_, ps) in PERMISSOES.items() for p in ps}
+        self.assertEqual(set(map(tuple, linhas)), esperado)
+        self.assertEqual(perfis, {"ADMIN", "COLABORADOR"})
+        admin = self.client.get("/api/auth/me", headers=self._auth_headers(self._login_demo())).get_json()["usuario"]
+        self.assertEqual(set(admin["permissoes"]), set(PERMISSOES))
 
     def test_inativas_visiveis_somente_para_admin(self):
         self._seed_analitico()

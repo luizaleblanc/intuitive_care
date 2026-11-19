@@ -1,6 +1,6 @@
 from flask import Blueprint, g, jsonify, request
 
-from backend.routes.decorators import admin_required, token_required
+from backend.routes.decorators import permissao_required, token_required
 from backend.services.analitico_service import AnaliticoService
 from backend.services.validators import BusinessRuleError
 
@@ -50,6 +50,6 @@ def contas():
 
 @analitico_bp.route("/contas/lotes/<int:ano>/<int:trimestre>/auditar", methods=["POST"])
 @token_required
-@admin_required
+@permissao_required("lotes.auditar")
 def auditar_lote(ano: int, trimestre: int):
     return jsonify(AnaliticoService.auditar_lote(ano, trimestre, g.current_user.nome)), 200

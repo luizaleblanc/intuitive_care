@@ -3,7 +3,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
-PERFIS_VALIDOS = ("ADMIN", "COLABORADOR")
+from backend.models.permissoes import PERFIS, permissoes_do_perfil, tem_permissao
+
+PERFIS_VALIDOS = tuple(PERFIS)
 
 PREFERENCIAS_PADRAO: Dict[str, Any] = {
     "idioma": "pt-BR",
@@ -46,6 +48,9 @@ class Usuario:
     def is_admin(self) -> bool:
         return self.perfil == "ADMIN"
 
+    def pode(self, permissao: str) -> bool:
+        return tem_permissao(self.perfil, permissao)
+
     @classmethod
     def from_row(cls, row: Dict[str, Any]) -> "Usuario":
         prefs = dict(PREFERENCIAS_PADRAO)
@@ -86,4 +91,5 @@ class Usuario:
             "membro_desde": _iso(self.criado_em),
             "ultimo_acesso": _iso(self.ultimo_acesso),
             "preferencias": self.preferencias,
+            "permissoes": sorted(permissoes_do_perfil(self.perfil)),
         }

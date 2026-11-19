@@ -1,6 +1,8 @@
 from typing import Optional
 
 from sqlalchemy import text
+
+from backend.models.permissoes import PERFIS, PERMISSOES
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from backend.database.connection import get_connection
@@ -142,6 +144,22 @@ SQLITE_SCHEMA_STATEMENTS = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email_hash TEXT NOT NULL,
         criado_em TIMESTAMP NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS perfis_acesso (
+        perfil TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        descricao TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS permissoes_perfil (
+        perfil TEXT NOT NULL,
+        permissao TEXT NOT NULL,
+        descricao TEXT NOT NULL,
+        PRIMARY KEY (perfil, permissao),
+        FOREIGN KEY (perfil) REFERENCES perfis_acesso(perfil) ON DELETE CASCADE
     )
     """,
 ]
@@ -304,6 +322,22 @@ MYSQL_SCHEMA_STATEMENTS = [
         INDEX idx_pedidos_reset (email_hash, criado_em)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
+    """
+    CREATE TABLE IF NOT EXISTS perfis_acesso (
+        perfil VARCHAR(30) PRIMARY KEY,
+        nome VARCHAR(60) NOT NULL,
+        descricao VARCHAR(255) NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS permissoes_perfil (
+        perfil VARCHAR(30) NOT NULL,
+        permissao VARCHAR(60) NOT NULL,
+        descricao VARCHAR(255) NOT NULL,
+        PRIMARY KEY (perfil, permissao),
+        CONSTRAINT fk_permissao_perfil FOREIGN KEY (perfil) REFERENCES perfis_acesso(perfil) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
 ]
 
 
@@ -367,6 +401,43 @@ def migrar_schema(conn) -> None:
                 conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo_sqlite if sqlite else tipo_mysql}"))
     # Perfil legado "ANALISTA" passa a ser "COLABORADOR" (somente leitura).
     conn.execute(text("UPDATE usuarios SET perfil = 'COLABORADOR' WHERE perfil NOT IN ('ADMIN', 'COLABORADOR')"))
+    sincronizar_permissoes(conn)
+    # No MySQL/TiDB, o perfil do usuário só aceita valores cadastrados em perfis_acesso.
+    if not sqlite:
+        existe = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND CONSTRAINT_NAME = 'fk_usuario_perfil'"
+            )
+        ).scalar()
+        if not existe:
+            conn.execute(
+                text(
+                    "ALTER TABLE usuarios ADD CONSTRAINT fk_usuario_perfil "
+                    "FOREIGN KEY (perfil) REFERENCES perfis_acesso(perfil)"
+                )
+            )
+
+
+def sincronizar_permissoes(conn) -> None:
+    """Grava no banco as regras de backend/models/permissoes.py (fonte única)."""
+    conn.execute(text("DELETE FROM permissoes_perfil"))
+    for perfil, (nome, descricao) in PERFIS.items():
+        atualizado = conn.execute(
+            text("UPDATE perfis_acesso SET nome = :n, descricao = :d WHERE perfil = :p"),
+            {"p": perfil, "n": nome, "d": descricao},
+        )
+        if atualizado.rowcount == 0:
+            conn.execute(
+                text("INSERT INTO perfis_acesso (perfil, nome, descricao) VALUES (:p, :n, :d)"),
+                {"p": perfil, "n": nome, "d": descricao},
+            )
+    for codigo, (descricao, perfis) in PERMISSOES.items():
+        for perfil in perfis:
+            conn.execute(
+                text("INSERT INTO permissoes_perfil (perfil, permissao, descricao) VALUES (:p, :c, :d)"),
+                {"p": perfil, "c": codigo, "d": descricao},
+            )
 
 
 def garantir_usuarios_demonstracao(conn) -> None:

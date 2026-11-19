@@ -82,6 +82,9 @@ class UserModel {
   final DateTime? ultimoAcesso;
   final PreferenciasModel preferencias;
 
+  /// Códigos de permissão definidos em backend/models/permissoes.py.
+  final List<String> permissoes;
+
   const UserModel({
     this.id,
     required this.nome,
@@ -95,9 +98,12 @@ class UserModel {
     this.membroDesde,
     this.ultimoAcesso,
     this.preferencias = const PreferenciasModel(),
+    this.permissoes = const [],
   });
 
   bool get isAdmin => perfil == 'ADMIN';
+
+  bool pode(String permissao) => permissoes.contains(permissao);
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     DateTime? data(dynamic v) => v == null ? null : DateTime.tryParse(v.toString());
@@ -116,6 +122,9 @@ class UserModel {
       preferencias: PreferenciasModel.fromJson(
         json['preferencias'] is Map ? Map<String, dynamic>.from(json['preferencias'] as Map) : null,
       ),
+      permissoes: json['permissoes'] is List
+          ? (json['permissoes'] as List).map((p) => p.toString()).toList()
+          : const [],
     );
   }
 

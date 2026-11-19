@@ -83,22 +83,58 @@ Fluxo de exemplo (filtrar o Painel por UF):
 
 ## Perfis de Acesso
 
-| Ação na plataforma | O que acontece no banco | Admin | Colaborador |
-| :--- | :--- | :---: | :---: |
-| Ver painel, operadoras e despesas | Leitura (`SELECT`) | ✅ | ✅ |
-| Filtrar por UF, ano, trimestre e modalidade | Leitura (`SELECT`) | ✅ | ✅ |
-| Exportar CSV (e PDF/XLSX conforme a preferência do perfil) | Leitura (`SELECT`) | ✅ | ✅ |
-| Ver operadoras inativas | Leitura (`SELECT`) | ✅ | ❌ |
-| Cadastrar nova operadora | Cria registro (`INSERT`) | ✅ | ❌ |
-| Editar dados de uma operadora | Atualiza o registro (`UPDATE`) | ✅ | ❌ |
-| Inativar ou reativar operadora | Altera o status (`UPDATE`) | ✅ | ❌ |
-| Auditar lote de demonstrações contábeis | Marca o lote como auditado (`UPDATE`) | ✅ | ❌ |
-| Editar o próprio perfil (dados, foto e preferências) | Atualiza só o próprio usuário | ✅ | ✅ |
+Existem dois perfis. **Os dois veem os mesmos dados; só o Administrador pode alterá-los.** O Colaborador consulta e exporta. No protótipo de design, o Colaborador aparece com o nome antigo, "Consumidor".
 
-- **Na tela:** ações de escrita **não aparecem** para o Colaborador (não ficam só desabilitadas). O Admin vê "Gerenciar", "Nova operadora", "Inativar/Reativar" e "Auditar lote"; o Colaborador vê "Detalhes", o aviso "Modo consulta · somente leitura" e "Exportar ficha (PDF)".
-- **Na API:** as rotas de escrita usam `@admin_required` e devolvem `HTTP 403` para o Colaborador, mesmo que alguém chame a rota direto.
-- **No banco:** coluna `perfil` da tabela `usuarios` (`ADMIN` ou `COLABORADOR`). Novos cadastros entram como `COLABORADOR`.
-- **Selo do perfil:** `ADMIN` em Forest e `COLABORADOR` em Sage, na Topbar e na tela de Perfil.
+### Regras por permissão
+
+As regras ficam em um único arquivo, [backend/models/permissoes.py](backend/models/permissoes.py). A API usa esse arquivo para liberar ou bloquear cada ação, e o banco recebe uma cópia dele a cada inicialização.
+
+| Permissão | O que libera | No banco | Admin | Colaborador |
+| :--- | :--- | :--- | :---: | :---: |
+| `painel.ver` | Ver o painel e seus indicadores | `SELECT` | ✅ | ✅ |
+| `operadoras.ver` | Listar e consultar operadoras ativas | `SELECT` | ✅ | ✅ |
+| `despesas.ver` | Consultar despesas e contas do setor | `SELECT` | ✅ | ✅ |
+| `dados.exportar` | Exportar em CSV, PDF ou XLSX | `SELECT` | ✅ | ✅ |
+| `perfil.editar_proprio` | Editar os próprios dados, foto e preferências | `UPDATE` só no próprio usuário | ✅ | ✅ |
+| `operadoras.ver_inativas` | Ver operadoras inativas | `SELECT` | ✅ | ❌ |
+| `operadoras.criar` | Cadastrar operadora | `INSERT` | ✅ | ❌ |
+| `operadoras.editar` | Editar dados de operadora | `UPDATE` | ✅ | ❌ |
+| `operadoras.alterar_status` | Inativar ou reativar operadora | `UPDATE` | ✅ | ❌ |
+| `operadoras.excluir` | Excluir operadora | `DELETE` | ✅ | ❌ |
+| `despesas.criar` | Lançar despesa | `INSERT` | ✅ | ❌ |
+| `despesas.editar` | Editar despesa | `UPDATE` | ✅ | ❌ |
+| `despesas.excluir` | Excluir despesa | `DELETE` | ✅ | ❌ |
+| `lotes.auditar` | Marcar lote contábil como auditado | `UPDATE` | ✅ | ❌ |
+
+### O que cada perfil vê nas telas
+
+| Tela | Administrador | Colaborador |
+| :--- | :--- | :--- |
+| Painel | Despesas processadas pela pipeline, registros extraídos e operadoras ativas | Despesas médico-hospitalares, sinistralidade e beneficiários, com o aviso "Modo consulta · somente leitura" |
+| Operadoras | "Nova operadora", "Exportar CSV" e operadoras inativas na lista | "Exportar"; operadoras inativas ficam ocultas |
+| Ficha da operadora | "Gerenciar", com edição e "Inativar/Reativar" | "Detalhes", "Exportar ficha (PDF)" e o aviso "Edição apenas para Administrador" |
+| Despesas | "Exportar relatório" e "Auditar lote" | Só "Exportar relatório" |
+| Perfil | Selo `ADMIN` em Forest | Selo `COLABORADOR` em Sage |
+
+Ações que o perfil não pode executar **não aparecem** na tela; não ficam apenas desabilitadas.
+
+### Onde a regra é aplicada
+
+1. **Banco de dados**
+   - `perfis_acesso`: os perfis existentes (`ADMIN`, `COLABORADOR`), com nome e descrição.
+   - `permissoes_perfil`: cada permissão concedida a cada perfil. É regravada a partir do `permissoes.py` em toda inicialização, então não deve ser editada à mão.
+   - `usuarios.perfil`: no MySQL/TiDB, só aceita perfis cadastrados em `perfis_acesso` (chave estrangeira `fk_usuario_perfil`). Novos cadastros entram como `COLABORADOR`.
+2. **API:** cada rota de escrita declara a permissão exigida com `@permissao_required("...")` e devolve `HTTP 403` para quem não a tem, mesmo que a rota seja chamada direto.
+3. **App:** `GET /api/auth/me` devolve a lista `permissoes` do usuário, disponível em `UserModel.pode("...")`. Esconder um botão é só conveniência: a proteção real está na API.
+
+**Para promover um usuário a Administrador:** `UPDATE usuarios SET perfil = 'ADMIN' WHERE email = '...';` A mudança vale no próximo login.
+
+**Para consultar as regras no banco:**
+```sql
+SELECT p.nome AS perfil, pp.permissao, pp.descricao
+FROM permissoes_perfil pp JOIN perfis_acesso p ON p.perfil = pp.perfil
+ORDER BY p.perfil, pp.permissao;
+```
 
 ### Contas de demonstração
 

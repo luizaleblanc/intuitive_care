@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from backend.routes.decorators import admin_required, get_json_body, token_required
+from backend.routes.decorators import permissao_required, get_json_body, token_required
 from backend.services.despesa_service import DespesaService
 
 despesa_bp = Blueprint("despesas", __name__, url_prefix="/api/despesas")
@@ -50,7 +50,7 @@ def get_despesa(despesa_id: int):
 
 @despesa_bp.route("", methods=["POST"])
 @token_required
-@admin_required
+@permissao_required("despesas.criar")
 def create_despesa():
     payload = get_json_body()
     result = DespesaService.criar(payload)
@@ -59,7 +59,7 @@ def create_despesa():
 
 @despesa_bp.route("/<int:despesa_id>", methods=["PUT"])
 @token_required
-@admin_required
+@permissao_required("despesas.editar")
 def update_despesa(despesa_id: int):
     payload = get_json_body()
     result = DespesaService.atualizar(despesa_id, payload)
@@ -68,7 +68,7 @@ def update_despesa(despesa_id: int):
 
 @despesa_bp.route("/<int:despesa_id>", methods=["DELETE"])
 @token_required
-@admin_required
+@permissao_required("despesas.excluir")
 def delete_despesa(despesa_id: int):
     result = DespesaService.excluir(despesa_id)
     return jsonify(result), 200

@@ -1,6 +1,6 @@
 from flask import Blueprint, Response, g, jsonify, request
 
-from backend.routes.decorators import admin_required, get_json_body, token_required
+from backend.routes.decorators import permissao_required, get_json_body, token_required
 from backend.services.despesa_service import DespesaService
 from backend.services.operadora_service import OperadoraService
 
@@ -8,7 +8,8 @@ operadora_bp = Blueprint("operadoras", __name__, url_prefix="/api/operadoras")
 
 
 def _is_admin() -> bool:
-    return g.current_user.perfil == "ADMIN"
+    """Só quem pode ver inativas recebe a visão completa da base de operadoras."""
+    return g.current_user.pode("operadoras.ver_inativas")
 
 
 @operadora_bp.route("", methods=["GET"])
@@ -73,7 +74,7 @@ def get_operadora_despesas(identifier: str):
 
 @operadora_bp.route("", methods=["POST"])
 @token_required
-@admin_required
+@permissao_required("operadoras.criar")
 def create_operadora():
     result = OperadoraService.criar(get_json_body())
     return jsonify(result), 201
@@ -81,7 +82,7 @@ def create_operadora():
 
 @operadora_bp.route("/<identifier>", methods=["PUT"])
 @token_required
-@admin_required
+@permissao_required("operadoras.editar")
 def update_operadora(identifier: str):
     result = OperadoraService.atualizar(identifier, get_json_body())
     return jsonify(result), 200
@@ -89,7 +90,7 @@ def update_operadora(identifier: str):
 
 @operadora_bp.route("/<identifier>/status", methods=["PATCH"])
 @token_required
-@admin_required
+@permissao_required("operadoras.alterar_status")
 def update_status_operadora(identifier: str):
     payload = get_json_body()
     return jsonify(OperadoraService.alterar_status(identifier, (payload.get("status") or "").strip())), 200
@@ -97,7 +98,7 @@ def update_status_operadora(identifier: str):
 
 @operadora_bp.route("/<identifier>", methods=["DELETE"])
 @token_required
-@admin_required
+@permissao_required("operadoras.excluir")
 def delete_operadora(identifier: str):
     force = request.args.get("force", "false").lower() == "true"
     result = OperadoraService.excluir(identifier, force=force)
