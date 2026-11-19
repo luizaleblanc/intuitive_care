@@ -35,8 +35,8 @@ class _PillBarChartState extends State<PillBarChart> {
       );
     }
     final maxV = widget.data.map((d) => d.value).fold<double>(0, math.max);
-    // Espaço do tooltip (~19px) + rótulo (~15px) + espaçamentos (16px).
-    final track = widget.height - 54;
+    // Espaço do tooltip (~19px) + rótulo em até 2 linhas (~30px) + espaçamentos (16px).
+    final track = widget.height - 70;
     return Semantics(
       label: 'Gráfico de barras: ${widget.data.map((d) => '${d.label} ${fmtBiNum(d.value)} ${widget.unit}').join(', ')}',
       child: SizedBox(
@@ -89,10 +89,16 @@ class _PillBarChartState extends State<PillBarChart> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text(d.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.numeric(11, weight: FontWeight.w500, color: AppColors.caption)),
+                        SizedBox(
+                          height: 30,
+                          child: Text(d.label,
+                              maxLines: 2,
+                              softWrap: false,
+                              overflow: TextOverflow.visible,
+                              textAlign: TextAlign.center,
+                              style: AppText.numeric(10, weight: FontWeight.w500, color: AppColors.caption)
+                                  .copyWith(height: 1.25)),
+                        ),
                       ],
                     );
                   }),
@@ -279,7 +285,7 @@ class _TrendAreaChartState extends State<TrendAreaChart> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(color: AppColors.forest, borderRadius: BorderRadius.circular(999)),
                       child: Text(
-                        '${dados[ativo].label} · ${fmtDec1(dados[ativo].value)} ${widget.unit}'
+                        '${dados[ativo].label.replaceAll('\n', ' de ')} · ${fmtDec1(dados[ativo].value)} ${widget.unit}'
                         '${ativo < comp.length ? '  |  ${widget.rotuloComparacao}: ${fmtDec1(comp[ativo].value)} ${widget.unit}' : ''}',
                         style: AppText.numeric(11, color: Colors.white),
                       ),
@@ -298,7 +304,7 @@ class _TrendAreaChartState extends State<TrendAreaChart> {
 class _TrendPainter extends CustomPainter {
   static const margemEsq = 44.0;
   static const margemSup = 34.0;
-  static const margemInf = 26.0;
+  static const margemInf = 38.0;
 
   final List<BarDatum> dados;
   final List<BarDatum> comp;
@@ -381,20 +387,22 @@ class _TrendPainter extends CustomPainter {
       final o = Offset(x(i), y(dados[i].value));
       canvas.drawCircle(o, i == ativo ? 6 : 3.5, Paint()..color = i == ativo ? AppColors.forest : AppColors.mint);
       canvas.drawCircle(o, i == ativo ? 3 : 1.5, Paint()..color = Colors.white);
-      // Rótulos espaçados para não se sobreporem.
-      final passo = (dados.length / 8).ceil();
+      // Rótulos espaçados (até ~84px cada) para não se sobreporem.
+      final cabem = ((size.width - margemEsq) / 84).floor().clamp(1, dados.length);
+      final passo = (dados.length / cabem).ceil();
       if (i % passo == 0 || i == dados.length - 1) {
-        _texto(canvas, dados[i].label, Offset(o.dx - 30, size.height - 16), AppColors.caption, 60, TextAlign.center);
+        _texto(canvas, dados[i].label, Offset((o.dx - 42).clamp(0.0, size.width - 84), size.height - 30), AppColors.caption, 84, TextAlign.center,
+            linhas: 2);
       }
     }
   }
 
-  void _texto(Canvas canvas, String t, Offset o, Color cor, double largura, TextAlign align) {
+  void _texto(Canvas canvas, String t, Offset o, Color cor, double largura, TextAlign align, {int linhas = 1}) {
     final tp = TextPainter(
-      text: TextSpan(text: t, style: AppText.numeric(10, weight: FontWeight.w500, color: cor)),
+      text: TextSpan(text: t, style: AppText.numeric(10, weight: FontWeight.w500, color: cor).copyWith(height: 1.25)),
       textDirection: TextDirection.ltr,
       textAlign: align,
-      maxLines: 1,
+      maxLines: linhas,
       ellipsis: '…',
     )..layout(minWidth: largura, maxWidth: largura);
     tp.paint(canvas, o);

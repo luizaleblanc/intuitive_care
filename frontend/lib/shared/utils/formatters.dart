@@ -35,8 +35,8 @@ double? variation(num? atual, num? anterior) {
 /// "4º trimestre de 2025" — títulos e rótulos.
 String fmtPeriodo(int ano, int trimestre) => '$trimestreº trimestre de $ano';
 
-/// "4º tri/25" — único formato abreviado, só no eixo de gráfico.
-String fmtPeriodoCurto(int ano, int trimestre) => '$trimestreº tri/${ano.toString().substring(2)}';
+/// Rótulo de eixo em duas linhas: "4º trimestre" / "2025". Trimestre nunca é abreviado.
+String fmtPeriodoCurto(int ano, int trimestre) => '$trimestreº trimestre\n$ano';
 
 String fmtTrimestre(int t) => '$tº trimestre';
 

@@ -371,6 +371,13 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         filtrado = self.client.get("/api/explorar?uf=SP&faixa_despesa=ate_10mi", headers=admin).get_json()
         self.assertEqual(filtrado["kpis"]["operadoras"], 1)
 
+        multi = self.client.get("/api/explorar?porte=pequeno,grande&faixa_despesa=ate_10mi,acima_1bi"
+                                "&consolidacao=consolidado,pendente", headers=admin).get_json()
+        self.assertEqual(multi["kpis"]["operadoras"], 0)  # AMIL de teste não tem beneficiários cadastrados
+        especificos = self.client.get("/api/explorar?anos=2026&granularidade=ano", headers=admin).get_json()
+        self.assertEqual(especificos["periodo"]["anos"], [2026])
+        self.assertEqual(self.client.get("/api/explorar?anos=2019,2026", headers=admin).status_code, 400)
+
         comp = self.client.get("/api/explorar?comparar=1", headers=admin).get_json()
         self.assertIsNone(comp["comparativo"]["kpis"])
 

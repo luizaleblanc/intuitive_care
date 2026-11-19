@@ -4,7 +4,7 @@ import '../models/explorar_model.dart';
 import '../repositories/analitico_repository.dart';
 import '../services/api_client.dart';
 
-enum ModoPeriodo { ano, intervalo, ultimos }
+enum ModoPeriodo { ano, intervalo, ultimos, especificos }
 
 /// Filtros da exploração. Todos são enviados à API; o resultado vem sempre do banco.
 class FiltrosExplorar {
@@ -12,13 +12,16 @@ class FiltrosExplorar {
   final int? anoInicio;
   final int? anoFim;
   final int ultimos;
+
+  /// Anos escolhidos um a um no modo "Anos específicos".
+  final Set<int> anos;
   final bool comparar;
   final String granularidade;
   final Set<String> ufs;
   final Set<String> modalidades;
-  final String porte;
-  final String faixaDespesa;
-  final String consolidacao;
+  final Set<String> portes;
+  final Set<String> faixas;
+  final Set<String> consolidacoes;
   final String status;
 
   const FiltrosExplorar({
@@ -26,13 +29,14 @@ class FiltrosExplorar {
     this.anoInicio,
     this.anoFim,
     this.ultimos = 3,
+    this.anos = const {},
     this.comparar = false,
     this.granularidade = 'trimestre',
     this.ufs = const {},
     this.modalidades = const {},
-    this.porte = '',
-    this.faixaDespesa = '',
-    this.consolidacao = '',
+    this.portes = const {},
+    this.faixas = const {},
+    this.consolidacoes = const {},
     this.status = '',
   });
 
@@ -41,13 +45,14 @@ class FiltrosExplorar {
     int? Function()? anoInicio,
     int? Function()? anoFim,
     int? ultimos,
+    Set<int>? anos,
     bool? comparar,
     String? granularidade,
     Set<String>? ufs,
     Set<String>? modalidades,
-    String? porte,
-    String? faixaDespesa,
-    String? consolidacao,
+    Set<String>? portes,
+    Set<String>? faixas,
+    Set<String>? consolidacoes,
     String? status,
   }) =>
       FiltrosExplorar(
@@ -55,13 +60,14 @@ class FiltrosExplorar {
         anoInicio: anoInicio != null ? anoInicio() : this.anoInicio,
         anoFim: anoFim != null ? anoFim() : this.anoFim,
         ultimos: ultimos ?? this.ultimos,
+        anos: anos ?? this.anos,
         comparar: comparar ?? this.comparar,
         granularidade: granularidade ?? this.granularidade,
         ufs: ufs ?? this.ufs,
         modalidades: modalidades ?? this.modalidades,
-        porte: porte ?? this.porte,
-        faixaDespesa: faixaDespesa ?? this.faixaDespesa,
-        consolidacao: consolidacao ?? this.consolidacao,
+        portes: portes ?? this.portes,
+        faixas: faixas ?? this.faixas,
+        consolidacoes: consolidacoes ?? this.consolidacoes,
         status: status ?? this.status,
       );
 
@@ -69,13 +75,19 @@ class FiltrosExplorar {
   int get avancadosAtivos =>
       (ufs.isNotEmpty ? 1 : 0) +
       (modalidades.isNotEmpty ? 1 : 0) +
-      (porte.isNotEmpty ? 1 : 0) +
-      (faixaDespesa.isNotEmpty ? 1 : 0) +
-      (consolidacao.isNotEmpty ? 1 : 0) +
+      (portes.isNotEmpty ? 1 : 0) +
+      (faixas.isNotEmpty ? 1 : 0) +
+      (consolidacoes.isNotEmpty ? 1 : 0) +
       (status.isNotEmpty ? 1 : 0);
 
   FiltrosExplorar semAvancados() => FiltrosExplorar(
-      modo: modo, anoInicio: anoInicio, anoFim: anoFim, ultimos: ultimos, comparar: comparar, granularidade: granularidade);
+      modo: modo,
+      anoInicio: anoInicio,
+      anoFim: anoFim,
+      ultimos: ultimos,
+      anos: anos,
+      comparar: comparar,
+      granularidade: granularidade);
 }
 
 const rotulosPorte = {'pequeno': 'Pequeno porte', 'medio': 'Médio porte', 'grande': 'Grande porte'};
@@ -120,6 +132,9 @@ class ExplorarViewModel extends ChangeNotifier {
         return (a, a);
       case ModoPeriodo.intervalo:
         return (_filtros.anoInicio ?? anos.firstOrNull, _filtros.anoFim ?? maisRecente);
+      case ModoPeriodo.especificos:
+        final sel = anosSelecionados;
+        return (sel.firstOrNull, sel.lastOrNull);
       case ModoPeriodo.ultimos:
         if (maisRecente == null) return (null, null);
         final inicio = maisRecente - _filtros.ultimos + 1;
@@ -127,18 +142,27 @@ class ExplorarViewModel extends ChangeNotifier {
     }
   }
 
+  /// Anos marcados no modo "Anos específicos" (o mais recente, se nenhum).
+  List<int> get anosSelecionados {
+    final validos = _filtros.anos.where(anosDisponiveis.contains).toList()..sort();
+    if (validos.isNotEmpty || anosDisponiveis.isEmpty) return validos;
+    return [anosDisponiveis.last];
+  }
+
   Map<String, String> get consulta {
     final (ini, fim) = intervalo;
+    final especificos = _filtros.modo == ModoPeriodo.especificos;
     return {
-      'ano_inicio': ini?.toString() ?? '',
-      'ano_fim': fim?.toString() ?? '',
+      'anos': especificos ? anosSelecionados.join(',') : '',
+      'ano_inicio': especificos ? '' : ini?.toString() ?? '',
+      'ano_fim': especificos ? '' : fim?.toString() ?? '',
       'granularidade': _filtros.granularidade,
       'comparar': _filtros.comparar ? '1' : '',
       'uf': (_filtros.ufs.toList()..sort()).join(','),
       'modalidade': (_filtros.modalidades.toList()..sort()).join(','),
-      'porte': _filtros.porte,
-      'faixa_despesa': _filtros.faixaDespesa,
-      'consolidacao': _filtros.consolidacao,
+      'porte': (_filtros.portes.toList()..sort()).join(','),
+      'faixa_despesa': (_filtros.faixas.toList()..sort()).join(','),
+      'consolidacao': (_filtros.consolidacoes.toList()..sort()).join(','),
       'status': _filtros.status,
     };
   }

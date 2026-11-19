@@ -140,6 +140,9 @@ class Facetas {
 class ExplorarModel {
   final int anoInicio;
   final int anoFim;
+
+  /// Anos efetivamente consultados (podem não ser contíguos, ex.: 2019, 2021).
+  final List<int> anos;
   final String granularidade;
   final List<int> anosDisponiveis;
   final List<int> anosParciais;
@@ -155,10 +158,12 @@ class ExplorarModel {
   final List<PontoSerie> serieAnterior;
   final String? avisoComparativo;
   final (int, int)? periodoAnterior;
+  final List<int> anosAnteriores;
 
   const ExplorarModel({
     required this.anoInicio,
     required this.anoFim,
+    this.anos = const [],
     required this.granularidade,
     required this.anosDisponiveis,
     required this.anosParciais,
@@ -172,6 +177,7 @@ class ExplorarModel {
     this.serieAnterior = const [],
     this.avisoComparativo,
     this.periodoAnterior,
+    this.anosAnteriores = const [],
   });
 
   factory ExplorarModel.fromJson(Map<String, dynamic> j) {
@@ -183,6 +189,7 @@ class ExplorarModel {
     return ExplorarModel(
       anoInicio: (periodo['ano_inicio'] as num).toInt(),
       anoFim: (periodo['ano_fim'] as num).toInt(),
+      anos: [for (final a in (periodo['anos'] as List? ?? [])) (a as num).toInt()],
       granularidade: (periodo['granularidade'] ?? 'trimestre').toString(),
       anosDisponiveis: [for (final a in (j['anos_disponiveis'] as List? ?? [])) (a as num).toInt()],
       anosParciais: [for (final a in (j['anos_parciais'] as List? ?? [])) (a as num).toInt()],
@@ -198,6 +205,7 @@ class ExplorarModel {
       periodoAnterior: comp == null
           ? null
           : ((comp['ano_inicio'] as num).toInt(), (comp['ano_fim'] as num).toInt()),
+      anosAnteriores: [for (final a in (comp?['anos'] as List? ?? [])) (a as num).toInt()],
     );
   }
 }

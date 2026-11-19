@@ -166,15 +166,16 @@ Tela `/explorar`, disponível para Administrador e Colaborador. Todos os número
 
 | Recurso | Como funciona |
 | :--- | :--- |
-| **Período por anos** | Três modos: um **Ano**, um **Intervalo** (de/até) ou os **Últimos N anos**. A série pode ser **por ano** ou **por trimestre**. Com **Comparar com período anterior**, os KPIs mostram a variação e a linha de evolução ganha a série anterior em Mint tracejado. |
+| **Período por anos** | Quatro modos: um **Ano**, um **Intervalo** (de/até), os **Últimos N anos** ou **Anos específicos**, marcando quantos anos quiser, mesmo fora de sequência (ex.: 2019, 2021 e 2024). A série pode ser **por ano** ou **por trimestre**. Com **Comparar com período anterior**, os KPIs mostram a variação e a linha de evolução ganha a série anterior em Mint tracejado. |
 | **Construtor de gráficos** | Até 8 cartões, cada um com um **tipo** (`pill_bar`, `donut_sage`, `trend_area`, `horizontal_ranking`) e uma **métrica** (despesas, receitas, sinistralidade, beneficiários). O layout fica salvo nas preferências do perfil (`graficos_explorar`). |
-| **Filtros avançados** | Facetas reais do dataset: modalidade e UF (múltipla escolha), porte da ANS por beneficiários, faixa de despesa no período e status de consolidação (lote auditado ou pendente). O Admin também filtra pelo status da operadora. Os filtros ativos aparecem como pílulas removíveis e valem para KPIs, gráficos e listagem. |
+| **Filtros avançados** | Facetas reais do dataset, todas com múltipla escolha: modalidade, UF, porte da ANS por beneficiários, faixa de despesa no período e status de consolidação (lote auditado ou pendente). O Admin também filtra pelo status da operadora. Os filtros ativos aparecem como pílulas removíveis e valem para KPIs, gráficos e listagem. |
 | **Listagem detalhada** | Operadoras do recorte, ordenáveis por métrica e paginadas. O clique abre a operadora, e o botão **Exportar** da Topbar baixa o recorte. |
 
 **Regras dos números**
 - **Sinistralidade:** é calculada como despesas ÷ receitas do conjunto, não como média de razões. Por isso não entra no gráfico de rosca, já que razões não se somam.
 - **Beneficiários:** usam o último trimestre do recorte.
 - **Anos parciais:** anos com menos de 4 trimestres publicados aparecem com `*`.
+- **Trimestre:** sempre por extenso ("1º trimestre" / "2026"), nunca abreviado como "1T26".
 - **Anos disponíveis:** dependem do ETL. Para ter mais histórico, rode `python etl/scraping.py --anos 5` e reprocesse.
 
 ## Critérios de Aceite do MVP

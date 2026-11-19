@@ -59,12 +59,22 @@ void main() {
     expect(consultas.last['comparar'], '1');
     expect(vm.dados!.kpisAnteriores!.despesas, 1e9);
 
-    await vm.aplicar(vm.filtros.copyWith(modalidades: {'Medicina de Grupo', 'Autogestão'}, ufs: {'SP'}, porte: 'grande'));
+    await vm.aplicar(vm.filtros.copyWith(modalidades: {'Medicina de Grupo', 'Autogestão'}, ufs: {'SP'}, portes: {'grande', 'medio'}));
     expect(consultas.last['modalidade'], 'Autogestão,Medicina de Grupo');
     expect(consultas.last['uf'], 'SP');
-    expect(consultas.last['porte'], 'grande');
+    expect(consultas.last['porte'], 'grande,medio');
     expect(vm.filtros.avancadosAtivos, 3);
     expect(vm.filtros.semAvancados().avancadosAtivos, 0);
+  });
+
+  test('anos específicos não contíguos vão no parâmetro anos', () async {
+    await vm.carregar();
+    await vm.aplicar(vm.filtros.copyWith(modo: ModoPeriodo.especificos, anos: {2026, 2024}));
+    expect(consultas.last['anos'], '2024,2026');
+    expect(consultas.last.containsKey('ano_inicio'), isFalse);
+    expect(vm.intervalo, (2024, 2026));
+    await vm.aplicar(vm.filtros.copyWith(anos: {2019}));
+    expect(vm.anosSelecionados, [2026], reason: 'ano sem dados é ignorado e volta ao mais recente');
   });
 
   test('intervalo invertido é corrigido antes de consultar', () async {

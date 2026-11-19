@@ -11,7 +11,7 @@ void main() {
   group('Formatação (seção 10)', () {
     test('período por extenso e abreviado só para eixo', () {
       expect(fmtPeriodo(2025, 4), '4º trimestre de 2025');
-      expect(fmtPeriodoCurto(2025, 4), '4º tri/25');
+      expect(fmtPeriodoCurto(2025, 4), '4º trimestre\n2025');
       expect(fmtTrimestre(2), '2º trimestre');
     });
 

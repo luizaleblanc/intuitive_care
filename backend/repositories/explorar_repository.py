@@ -35,15 +35,14 @@ class ExplorarRepository:
 
     @staticmethod
     def linhas(
-        ano_inicio: int,
-        ano_fim: int,
+        anos: Sequence[int],
         ufs: Sequence[str],
         modalidades: Sequence[str],
         status: str,
         consolidacao: str,
     ) -> List[Dict[str, Any]]:
-        condicoes = ["d.ano BETWEEN :ini AND :fim"]
-        params: Dict[str, Any] = {"ini": ano_inicio, "fim": ano_fim}
+        condicoes = ["d.ano IN :anos"]
+        params: Dict[str, Any] = {"anos": list(anos)}
         if ufs:
             condicoes.append("o.uf IN :ufs")
             params["ufs"] = list(ufs)
@@ -68,6 +67,7 @@ class ExplorarRepository:
             "LEFT JOIN beneficiarios_trimestre b ON b.reg_ans = d.reg_ans AND b.ano = d.ano AND b.trimestre = d.trimestre "
             f"WHERE {' AND '.join(condicoes)}"
         )
+        sql = sql.bindparams(bindparam("anos", expanding=True))
         if ufs:
             sql = sql.bindparams(bindparam("ufs", expanding=True))
         if modalidades:

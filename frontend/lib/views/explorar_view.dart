@@ -138,11 +138,17 @@ class _ExplorarViewState extends State<ExplorarView> {
   }
 }
 
-String _rotuloPeriodo(ExplorarModel d) => d.anoInicio == d.anoFim ? '${d.anoInicio}' : '${d.anoInicio}–${d.anoFim}';
+String _rotuloAnos(List<int> anos, int ini, int fim) {
+  final contiguo = anos.isEmpty || anos.length == fim - ini + 1;
+  if (ini == fim) return '$ini';
+  return contiguo ? '$ini–$fim' : anos.join(', ');
+}
+
+String _rotuloPeriodo(ExplorarModel d) => _rotuloAnos(d.anos, d.anoInicio, d.anoFim);
 
 String _rotuloPonto(ExplorarModel d, PontoSerie p) => p.trimestre == null
     ? '${p.ano}${d.anosParciais.contains(p.ano) ? '*' : ''}'
-    : '${p.trimestre}T${p.ano.toString().substring(2)}';
+    : fmtPeriodoCurto(p.ano, p.trimestre!);
 
 // ---------------------------------------------------------------------------
 // Barra de controles: período, granularidade, comparação e atalhos
@@ -170,13 +176,14 @@ class _BarraControles extends StatelessWidget {
             Text('PERÍODO', style: AppText.eyebrow()),
           ]),
           SizedBox(
-            width: 300,
+            width: 440,
             child: SegmentedPill<ModoPeriodo>(
               value: f.modo,
               options: const [
                 (ModoPeriodo.ano, 'Ano'),
                 (ModoPeriodo.intervalo, 'Intervalo'),
                 (ModoPeriodo.ultimos, 'Últimos anos'),
+                (ModoPeriodo.especificos, 'Anos específicos'),
               ],
               onChanged: (m) => vm.aplicar(f.copyWith(modo: m)),
             ),
@@ -209,6 +216,21 @@ class _BarraControles extends StatelessWidget {
               onChanged: (a) => vm.aplicar(f.copyWith(anoInicio: () => ini, anoFim: () => a)),
             ),
           ],
+          if (f.modo == ModoPeriodo.especificos)
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final a in dados.anosDisponiveis)
+                _Chip(
+                  rotulo: '$a',
+                  ativo: vm.anosSelecionados.contains(a),
+                  onTap: () {
+                    final atual = {...vm.anosSelecionados};
+                    // Sempre fica ao menos um ano marcado.
+                    if (atual.contains(a) && atual.length == 1) return;
+                    atual.contains(a) ? atual.remove(a) : atual.add(a);
+                    vm.aplicar(f.copyWith(anos: atual));
+                  },
+                ),
+            ]),
           if (f.modo == ModoPeriodo.ultimos)
             AppSelect<int>(
               value: f.ultimos.clamp(2, dados.anosDisponiveis.length < 2 ? 2 : dados.anosDisponiveis.length),
@@ -308,9 +330,10 @@ class _FiltrosAtivos extends StatelessWidget {
     final pilulas = <(String, FiltrosExplorar)>[
       for (final m in f.modalidades) (m, f.copyWith(modalidades: {...f.modalidades}..remove(m))),
       for (final u in f.ufs) ('UF $u', f.copyWith(ufs: {...f.ufs}..remove(u))),
-      if (f.porte.isNotEmpty) (rotulosPorte[f.porte]!, f.copyWith(porte: '')),
-      if (f.faixaDespesa.isNotEmpty) ('Despesa: ${rotulosFaixa[f.faixaDespesa]!}', f.copyWith(faixaDespesa: '')),
-      if (f.consolidacao.isNotEmpty) (rotulosConsolidacao[f.consolidacao]!, f.copyWith(consolidacao: '')),
+      for (final p in f.portes) (rotulosPorte[p]!, f.copyWith(portes: {...f.portes}..remove(p))),
+      for (final x in f.faixas) ('Despesa: ${rotulosFaixa[x]!}', f.copyWith(faixas: {...f.faixas}..remove(x))),
+      for (final c in f.consolidacoes)
+        (rotulosConsolidacao[c]!, f.copyWith(consolidacoes: {...f.consolidacoes}..remove(c))),
       if (f.status.isNotEmpty) ('Status: ${f.status}', f.copyWith(status: '')),
     ];
     if (pilulas.isEmpty) return const SizedBox.shrink();
@@ -354,7 +377,7 @@ class _Kpis extends StatelessWidget {
         ? 'Período ${_rotuloPeriodo(dados)}'
         : ant == null
             ? 'Sem dados no período anterior'
-            : 'vs ${periodoAnt!.$1 == periodoAnt.$2 ? periodoAnt.$1 : '${periodoAnt.$1}–${periodoAnt.$2}'}';
+            : 'vs ${_rotuloAnos(dados.anosAnteriores, periodoAnt!.$1, periodoAnt.$2)}';
     double? delta(Metrica m) => comparar && ant != null ? variation(dados.kpis.de(m), ant.de(m)) : null;
     return GridRow([
       (3, KpiCard(dark: true, label: 'Despesas assistenciais', value: fmtMetrica(Metrica.despesas, dados.kpis.despesas),
@@ -750,20 +773,21 @@ class _PainelFiltrosState extends State<_PainelFiltros> {
                   _f.ufs.contains,
                   (u) => _f = _f.copyWith(ufs: _f.ufs.contains(u) ? ({..._f.ufs}..remove(u)) : {..._f.ufs, u}),
                 )),
-                _secao('Porte (faixa de beneficiários)', 'Classificação de porte usada pela ANS.', _chips(
+                _secao('Porte (faixa de beneficiários)', 'Classificação da ANS. Selecione um ou mais.', _chips(
                   [for (final e in rotulosPorte.entries) (e.key, '${e.value} · ${descricoesPorte[e.key]}')],
-                  (v) => _f.porte == v,
-                  (v) => _f = _f.copyWith(porte: _f.porte == v ? '' : v),
+                  _f.portes.contains,
+                  (v) => _f = _f.copyWith(portes: _alternar(_f.portes, v)),
                 )),
-                _secao('Faixa de despesa no período', 'Soma das despesas assistenciais da operadora no recorte.', _chips(
+                _secao('Faixa de despesa no período', 'Soma das despesas da operadora no recorte. Selecione uma ou mais.',
+                    _chips(
                   [for (final e in rotulosFaixa.entries) (e.key, e.value)],
-                  (v) => _f.faixaDespesa == v,
-                  (v) => _f = _f.copyWith(faixaDespesa: _f.faixaDespesa == v ? '' : v),
+                  _f.faixas.contains,
+                  (v) => _f = _f.copyWith(faixas: _alternar(_f.faixas, v)),
                 )),
-                _secao('Status de consolidação', 'Trimestres com lote de demonstrações auditado ou não.', _chips(
+                _secao('Status de consolidação', 'Trimestres com lote auditado ou pendente. Selecione um ou ambos.', _chips(
                   [for (final e in rotulosConsolidacao.entries) (e.key, e.value)],
-                  (v) => _f.consolidacao == v,
-                  (v) => _f = _f.copyWith(consolidacao: _f.consolidacao == v ? '' : v),
+                  _f.consolidacoes.contains,
+                  (v) => _f = _f.copyWith(consolidacoes: _alternar(_f.consolidacoes, v)),
                 )),
                 if (fac.status.length > 1)
                   _secao('Status da operadora', 'Visível apenas para Administrador.', _chips(
@@ -791,6 +815,8 @@ class _PainelFiltrosState extends State<_PainelFiltros> {
     );
   }
 }
+
+Set<String> _alternar(Set<String> atual, String v) => atual.contains(v) ? ({...atual}..remove(v)) : {...atual, v};
 
 class _Chip extends StatelessWidget {
   final String rotulo;

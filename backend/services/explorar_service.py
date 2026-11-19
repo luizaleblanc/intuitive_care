@@ -59,27 +59,40 @@ class ExplorarService:
             except (TypeError, ValueError):
                 raise BusinessRuleError(f"Parâmetro '{nome}' deve ser um ano.", 400)
 
-        ano_fim = ano_arg("ano_fim", anos[-1])
-        ano_inicio = ano_arg("ano_inicio", ano_fim)
-        if ano_inicio > ano_fim:
-            raise BusinessRuleError("O ano inicial não pode ser maior que o final.", 400)
+        especificos = _lista(args.get("anos"))
+        if especificos:
+            try:
+                selecionados = sorted({int(a) for a in especificos})
+            except ValueError:
+                raise BusinessRuleError("Parâmetro 'anos' deve conter anos separados por vírgula.", 400)
+            if any(a not in anos for a in selecionados):
+                raise BusinessRuleError("Há ano selecionado sem dados carregados.", 400)
+        else:
+            ano_fim = ano_arg("ano_fim", anos[-1])
+            ano_inicio = ano_arg("ano_inicio", ano_fim)
+            if ano_inicio > ano_fim:
+                raise BusinessRuleError("O ano inicial não pode ser maior que o final.", 400)
+            selecionados = list(range(ano_inicio, ano_fim + 1))
+        ano_inicio, ano_fim = selecionados[0], selecionados[-1]
 
         granularidade = args.get("granularidade") or "trimestre"
-        consolidacao = args.get("consolidacao") or ""
         status = args.get("status") or ""
-        porte = args.get("porte") or ""
-        faixa = args.get("faixa_despesa") or ""
+        portes = _lista(args.get("porte"))
+        faixas = _lista(args.get("faixa_despesa"))
+        consolidacoes = _lista(args.get("consolidacao"))
         ufs = [u.upper() for u in _lista(args.get("uf"))]
         modalidades = _lista(args.get("modalidade"))
-        for valor, validos, nome in (
-            (granularidade, GRANULARIDADES, "granularidade"),
-            (consolidacao, CONSOLIDACOES, "consolidacao"),
-            (status, STATUS, "status"),
-            (porte, ("", *PORTES), "porte"),
-            (faixa, ("", *FAIXAS_DESPESA), "faixa_despesa"),
+        for valores, validos, nome in (
+            ([granularidade], GRANULARIDADES, "granularidade"),
+            ([status], STATUS, "status"),
+            (portes, PORTES, "porte"),
+            (faixas, FAIXAS_DESPESA, "faixa_despesa"),
+            (consolidacoes, CONSOLIDACOES[1:], "consolidacao"),
         ):
-            if valor not in validos:
+            if any(v not in validos for v in valores):
                 raise BusinessRuleError(f"Valor inválido para '{nome}'.", 400)
+        # Marcar todas as opções de consolidação equivale a não filtrar.
+        consolidacao = consolidacoes[0] if len(consolidacoes) == 1 else ""
         if any(u not in VALID_UFS for u in ufs):
             raise BusinessRuleError("UF inválida no filtro.", 400)
         if not ver_inativas:
@@ -87,27 +100,26 @@ class ExplorarService:
 
         comparar = str(args.get("comparar", "")).lower() in ("1", "true", "sim")
         filtros = dict(ufs=ufs, modalidades=modalidades, status=status, consolidacao=consolidacao,
-                       porte=porte, faixa=faixa)
-        atual = ExplorarService._calcular(ano_inicio, ano_fim, granularidade, filtros)
+                       portes=portes, faixas=faixas)
+        atual = ExplorarService._calcular(selecionados, granularidade, filtros)
 
         anterior = None
         if comparar:
+            # Mesmo desenho de anos, deslocado pela amplitude da seleção (ex.: 2025+2026 -> 2023+2024).
             n = ano_fim - ano_inicio + 1
-            if ano_inicio - n >= anos[0]:
-                anterior = ExplorarService._calcular(ano_inicio - n, ano_fim - n, granularidade, filtros)
-                anterior = {
-                    "ano_inicio": ano_inicio - n,
-                    "ano_fim": ano_fim - n,
-                    "kpis": anterior["kpis"],
-                    "serie": anterior["serie"],
-                }
+            anteriores = [a - n for a in selecionados]
+            if all(a in anos for a in anteriores):
+                calculado = ExplorarService._calcular(anteriores, granularidade, filtros)
+                anterior = {"anos": anteriores, "ano_inicio": anteriores[0], "ano_fim": anteriores[-1],
+                            "kpis": calculado["kpis"], "serie": calculado["serie"]}
             else:
-                anterior = {"ano_inicio": ano_inicio - n, "ano_fim": ano_fim - n, "kpis": None, "serie": [],
-                            "aviso": "Não há dados para o período anterior equivalente."}
+                anterior = {"anos": anteriores, "ano_inicio": anteriores[0], "ano_fim": anteriores[-1], "kpis": None,
+                            "serie": [], "aviso": "Não há dados para o período anterior equivalente."}
 
         trimestres = ExplorarRepository.trimestres_por_ano()
         return {
-            "periodo": {"ano_inicio": ano_inicio, "ano_fim": ano_fim, "granularidade": granularidade},
+            "periodo": {"ano_inicio": ano_inicio, "ano_fim": ano_fim, "anos": selecionados,
+                        "granularidade": granularidade},
             "anos_disponiveis": anos,
             "anos_parciais": [a for a in anos if trimestres.get(a, 0) < 4],
             "facetas": {
@@ -122,12 +134,13 @@ class ExplorarService:
         }
 
     @staticmethod
-    def _calcular(ano_inicio: int, ano_fim: int, granularidade: str, f: Dict[str, Any]) -> Dict[str, Any]:
-        linhas = ExplorarRepository.linhas(ano_inicio, ano_fim, f["ufs"], f["modalidades"], f["status"], f["consolidacao"])
+    def _calcular(anos: List[int], granularidade: str, f: Dict[str, Any]) -> Dict[str, Any]:
+        linhas = ExplorarRepository.linhas(anos, f["ufs"], f["modalidades"], f["status"], f["consolidacao"])
 
-        if f["porte"]:
-            limite = PORTES[f["porte"]]
-            linhas = [r for r in linhas if r["beneficiarios"] and _na_faixa(float(r["beneficiarios"]), limite)]
+        if f["portes"]:
+            limites = [PORTES[p] for p in f["portes"]]
+            linhas = [r for r in linhas
+                      if r["beneficiarios"] and any(_na_faixa(float(r["beneficiarios"]), l) for l in limites)]
 
         por_operadora: Dict[str, Dict[str, Any]] = {}
         for r in linhas:
@@ -150,9 +163,10 @@ class ExplorarService:
                 op["_ultimo"] = chave
                 op["beneficiarios"] = int(r["benef"] or 0)
 
-        if f["faixa"]:
-            limite = FAIXAS_DESPESA[f["faixa"]]
-            por_operadora = {k: v for k, v in por_operadora.items() if _na_faixa(v["despesas"], limite)}
+        if f["faixas"]:
+            limites = [FAIXAS_DESPESA[x] for x in f["faixas"]]
+            por_operadora = {k: v for k, v in por_operadora.items()
+                             if any(_na_faixa(v["despesas"], l) for l in limites)}
             linhas = [r for r in linhas if r["reg_ans"] in por_operadora]
 
         # Série temporal
