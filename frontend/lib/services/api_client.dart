@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -103,7 +106,7 @@ class ApiClient {
         .timeout(const Duration(seconds: 60));
     if (response.statusCode == 401) onUnauthorized?.call();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(statusCode: response.statusCode, message: 'Erro HTTP ${response.statusCode}');
+      throw ApiException(statusCode: response.statusCode, message: mensagemPorStatus(response.statusCode));
     }
     return utf8.decode(response.bodyBytes);
   }
@@ -113,53 +116,66 @@ class ApiClient {
   }
 
   Future<dynamic> _send(Future<http.Response> Function() requestFn) async {
+    final http.Response response;
     try {
-      final response = await requestFn().timeout(const Duration(seconds: 30));
-      dynamic decoded;
-      if (response.body.isNotEmpty) {
-        try {
-          decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        } catch (_) {
-          decoded = {'erro': response.body};
-        }
-      }
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return decoded;
-      }
-
-      final message = decoded is Map<String, dynamic>
-          ? (decoded['erro'] ?? decoded['mensagem'] ?? 'Erro na requisição HTTP ${response.statusCode}')
-              .toString()
-          : 'Erro HTTP ${response.statusCode}';
-
-      final details = decoded is Map<String, dynamic> && decoded['detalhes'] is Map<String, dynamic>
-          ? decoded['detalhes'] as Map<String, dynamic>
-          : null;
-
-      if (response.statusCode == 401) {
-        onUnauthorized?.call();
-      }
-
-      throw ApiException(
-        statusCode: response.statusCode,
-        message: message,
-        details: details,
-      );
-    } on ApiException {
-      rethrow;
-    } on http.ClientException {
-      throw const ApiException(
-        statusCode: 0,
-        message: 'Não foi possível conectar à API Flask. Verifique se o servidor está ativo.',
-      );
+      response = await requestFn().timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw const ApiException(statusCode: 0, message: mensagemTempoEsgotado);
     } catch (e) {
-      throw ApiException(
-        statusCode: 0,
-        message: 'Falha de comunicação com o servidor: $e',
-      );
+      debugPrint('[ApiClient] Falha de rede: $e');
+      throw const ApiException(statusCode: 0, message: mensagemSemConexao);
     }
+
+    dynamic decoded;
+    if (response.body.isNotEmpty) {
+      try {
+        decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        decoded = null; // Resposta que não é da API (ex.: página HTML de erro).
+      }
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (decoded == null && response.body.isNotEmpty) {
+        debugPrint('[ApiClient] Resposta sem JSON de ${response.request?.url}');
+        throw const ApiException(statusCode: 0, message: mensagemServidorIndisponivel);
+      }
+      return decoded;
+    }
+
+    if (response.statusCode == 401) {
+      onUnauthorized?.call();
+    }
+
+    // Mensagens da própria API já são escritas para o usuário; o resto vira texto amigável.
+    final mensagemApi = decoded is Map<String, dynamic> ? (decoded['erro'] ?? decoded['mensagem']) : null;
+    if (mensagemApi == null) {
+      debugPrint('[ApiClient] HTTP ${response.statusCode} sem mensagem da API em ${response.request?.url}');
+    }
+    throw ApiException(
+      statusCode: response.statusCode,
+      message: mensagemApi?.toString() ?? mensagemPorStatus(response.statusCode),
+      details: decoded is Map<String, dynamic> && decoded['detalhes'] is Map<String, dynamic>
+          ? decoded['detalhes'] as Map<String, dynamic>
+          : null,
+    );
   }
+}
+
+const mensagemSemConexao = 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
+const mensagemTempoEsgotado = 'O servidor demorou para responder. Tente novamente em instantes.';
+const mensagemServidorIndisponivel =
+    'O serviço está indisponível no momento. Tente novamente em alguns minutos.';
+
+/// Texto mostrado ao usuário quando a resposta não traz uma mensagem da API.
+String mensagemPorStatus(int status) {
+  if (status == 400 || status == 422) return 'Alguns dados não foram aceitos. Revise as informações e tente de novo.';
+  if (status == 401) return 'Sua sessão expirou. Entre novamente.';
+  if (status == 403) return 'Você não tem permissão para esta ação.';
+  if (status == 404) return mensagemServidorIndisponivel;
+  if (status == 429) return 'Muitas tentativas em pouco tempo. Aguarde alguns minutos.';
+  if (status >= 500) return 'Ocorreu um erro no servidor. Tente novamente em instantes.';
+  return 'Não foi possível concluir a ação. Tente novamente.';
 }
 
 typedef VoidCallback = void Function();
