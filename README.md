@@ -83,7 +83,7 @@ Fluxo de exemplo (filtrar o Painel por UF):
 
 ## Perfis de Acesso
 
-Existem dois perfis. **Os dois veem os mesmos dados; só o Administrador pode alterá-los.** O Colaborador consulta e exporta. No protótipo de design, o Colaborador aparece com o nome antigo, "Consumidor".
+Existem dois perfis. **Os dois veem os mesmos dados; só o Administrador pode alterá-los e exportá-los.** O Colaborador apenas consulta. No protótipo de design, o Colaborador aparece com o nome antigo, "Consumidor".
 
 ### Regras por permissão
 
@@ -94,7 +94,7 @@ As regras ficam em um único arquivo, [backend/models/permissoes.py](backend/mod
 | `painel.ver` | Ver o painel e seus indicadores | `SELECT` | ✅ | ✅ |
 | `operadoras.ver` | Listar e consultar operadoras ativas | `SELECT` | ✅ | ✅ |
 | `despesas.ver` | Consultar despesas e contas do setor | `SELECT` | ✅ | ✅ |
-| `dados.exportar` | Exportar em CSV, PDF ou XLSX | `SELECT` | ✅ | ✅ |
+| `dados.exportar` | Exportar em CSV, PDF ou XLSX | `SELECT` | ✅ | ❌ |
 | `perfil.editar_proprio` | Editar os próprios dados, foto e preferências | `UPDATE` só no próprio usuário | ✅ | ✅ |
 | `operadoras.ver_inativas` | Ver operadoras inativas | `SELECT` | ✅ | ❌ |
 | `operadoras.criar` | Cadastrar operadora | `INSERT` | ✅ | ❌ |
@@ -111,9 +111,9 @@ As regras ficam em um único arquivo, [backend/models/permissoes.py](backend/mod
 | Tela | Administrador | Colaborador |
 | :--- | :--- | :--- |
 | Painel | Despesas processadas pela pipeline, registros extraídos e operadoras ativas | Despesas médico-hospitalares, sinistralidade e beneficiários, com o aviso "Modo consulta · somente leitura" |
-| Operadoras | "Nova operadora", "Exportar CSV" e operadoras inativas na lista | "Exportar"; operadoras inativas ficam ocultas |
-| Ficha da operadora | "Gerenciar", com edição e "Inativar/Reativar" | "Detalhes", "Exportar ficha (PDF)" e o aviso "Edição apenas para Administrador" |
-| Despesas | "Exportar relatório" e "Auditar lote" | Só "Exportar relatório" |
+| Operadoras | "Nova operadora", "Exportar CSV" e operadoras inativas na lista | Só consulta; operadoras inativas ficam ocultas |
+| Ficha da operadora | "Gerenciar", com edição, "Inativar/Reativar" e "Exportar ficha (PDF)" | "Detalhes" e o aviso de modo consulta |
+| Despesas | "Exportar relatório" e "Auditar lote" | Só consulta |
 | Perfil | Selo `ADMIN` em Forest | Selo `COLABORADOR` em Sage |
 
 Ações que o perfil não pode executar **não aparecem** na tela; não ficam apenas desabilitadas.
@@ -169,7 +169,7 @@ Tela `/explorar`, disponível para Administrador e Colaborador. Todos os número
 | **Período por anos** | Quatro modos: um **Ano**, um **Intervalo** (de/até), os **Últimos N anos** ou **Anos específicos**, marcando quantos anos quiser, mesmo fora de sequência (ex.: 2019, 2021 e 2024). A série pode ser **por ano** ou **por trimestre**. Com **Comparar com período anterior**, os KPIs mostram a variação e a linha de evolução ganha a série anterior em Mint tracejado. |
 | **Construtor de gráficos** | Até 8 cartões, cada um com um **tipo** (`pill_bar`, `donut_sage`, `trend_area`, `horizontal_ranking`) e uma **métrica** (despesas, receitas, sinistralidade, beneficiários). O layout fica salvo nas preferências do perfil (`graficos_explorar`). |
 | **Filtros avançados** | Facetas reais do dataset, todas com múltipla escolha: modalidade, UF, porte da ANS por beneficiários, faixa de despesa no período e status de consolidação (lote auditado ou pendente). O Admin também filtra pelo status da operadora. Os filtros ativos aparecem como pílulas removíveis e valem para KPIs, gráficos e listagem. |
-| **Listagem detalhada** | Operadoras do recorte, ordenáveis por métrica e paginadas. O clique abre a operadora, e o botão **Exportar** da Topbar baixa o recorte. |
+| **Listagem detalhada** | Operadoras do recorte, ordenáveis por métrica e paginadas. O clique abre a operadora, e o botão **Exportar** da Topbar baixa o recorte (só Administrador). |
 
 **Regras dos números**
 - **Sinistralidade:** é calculada como despesas ÷ receitas do conjunto, não como média de razões. Por isso não entra no gráfico de rosca, já que razões não se somam.
@@ -273,7 +273,7 @@ Todas as requisições e respostas utilizam **JSON**. Rotas protegidas exigem ca
 | **Contas** | `POST` | `/api/contas/lotes/<ano>/<trimestre>/auditar` | Marca o lote do trimestre como auditado **(ADMIN)** |
 | **Operadoras** | `GET` | `/api/operadoras` | Lista paginada com busca (Registro ANS, razão social, nome fantasia ou CNPJ com/sem máscara) e filtros `uf`, `modalidade`, `status` |
 | **Operadoras** | `GET` | `/api/operadoras/resumo` | Ativas, em análise, inativadas em 12 meses, beneficiários, modalidades e UFs |
-| **Operadoras** | `GET` | `/api/operadoras/exportar.csv` | Exporta a lista filtrada em CSV (Admin e Colaborador; inativas só para o Admin) |
+| **Operadoras** | `GET` | `/api/operadoras/exportar.csv` | Exporta a lista filtrada em CSV (somente Administrador; Colaborador recebe 403) |
 | **Operadoras** | `GET` | `/api/operadoras/<id>` | Detalha operadora por `registro_ans` ou `cnpj` |
 | **Operadoras** | `GET` | `/api/operadoras/<id>/despesas` | Lista despesas da operadora |
 | **Operadoras** | `POST` | `/api/operadoras` | Cadastra nova operadora (valida CNPJ e UF no backend) **(ADMIN)** |

@@ -151,11 +151,11 @@ class _OperadorasViewState extends State<OperadorasView> {
                     const SizedBox(width: 12),
                     Text('${fmtInt(vm.total)} resultado(s)', style: AppText.sans(14, color: AppColors.muted)),
                     const Spacer(),
-                    AppButton('Exportar CSV',
-                        variant: isAdmin ? ButtonVariant.secondary : ButtonVariant.accent,
-                        icon: LucideIcons.download,
-                        onPressed: () => _exportar(formato: 'CSV')),
                     if (isAdmin) ...[
+                      AppButton('Exportar CSV',
+                          variant: ButtonVariant.secondary,
+                          icon: LucideIcons.download,
+                          onPressed: () => _exportar(formato: 'CSV')),
                       const SizedBox(width: 8),
                       AppButton('Nova operadora', icon: LucideIcons.plus, onPressed: () => _abrir(null)),
                     ],
@@ -615,8 +615,8 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
             children: [
               if (!isAdmin)
                 Expanded(
-                  child: AppButton('Exportar ficha (PDF)',
-                      variant: ButtonVariant.accent, icon: LucideIcons.fileDown, expand: true, onPressed: _exportarFicha),
+                  child: Text('Modo consulta: edição e exportação disponíveis apenas para o perfil Administrador.',
+                      style: AppText.sans(12, color: AppColors.caption)),
                 )
               else if (_editando) ...[
                 AppButton('Cancelar', variant: ButtonVariant.secondary, onPressed: () {
@@ -644,7 +644,9 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
                     variant: ButtonVariant.danger,
                     icon: LucideIcons.power,
                     onPressed: saving ? null : _alternarStatus),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                AppIconButton(icon: LucideIcons.fileDown, label: 'Exportar ficha (PDF)', onPressed: _exportarFicha),
+                const SizedBox(width: 8),
                 Expanded(
                   child: AppButton('Editar operadora',
                       icon: LucideIcons.pencil, expand: true, onPressed: () => setState(() => _editando = true)),

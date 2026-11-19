@@ -717,7 +717,7 @@ class AppSelect<T> extends StatelessWidget {
           initialValue: value,
           onSelected: onChanged,
           position: PopupMenuPosition.under,
-          constraints: const BoxConstraints(minWidth: 200, maxHeight: 360),
+          constraints: BoxConstraints(minWidth: width ?? 200, maxHeight: 360),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: Colors.white,
           elevation: 6,

@@ -8,7 +8,7 @@ from typing import Dict, FrozenSet, Tuple
 
 PERFIS: Dict[str, Tuple[str, str]] = {
     "ADMIN": ("Administrador", "Consulta, exporta e altera os dados da plataforma."),
-    "COLABORADOR": ("Colaborador", "Consulta e exporta. Não altera dados, exceto o próprio perfil."),
+    "COLABORADOR": ("Colaborador", "Somente consulta. Não exporta nem altera dados, exceto o próprio perfil."),
 }
 
 # código -> (descrição, perfis autorizados)
@@ -16,7 +16,7 @@ PERMISSOES: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "painel.ver": ("Ver o painel e seus indicadores", ("ADMIN", "COLABORADOR")),
     "operadoras.ver": ("Listar e consultar operadoras ativas", ("ADMIN", "COLABORADOR")),
     "despesas.ver": ("Consultar despesas e contas do setor", ("ADMIN", "COLABORADOR")),
-    "dados.exportar": ("Exportar dados em CSV, PDF ou XLSX", ("ADMIN", "COLABORADOR")),
+    "dados.exportar": ("Exportar dados em CSV, PDF ou XLSX", ("ADMIN",)),
     "perfil.editar_proprio": ("Editar os próprios dados, foto e preferências", ("ADMIN", "COLABORADOR")),
     "operadoras.ver_inativas": ("Ver operadoras inativas", ("ADMIN",)),
     "operadoras.criar": ("Cadastrar operadora", ("ADMIN",)),

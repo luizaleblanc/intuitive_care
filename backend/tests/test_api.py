@@ -406,7 +406,7 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
             self.client.patch("/api/operadoras/326305/status", json={"status": "Inativa"}, headers=h).status_code, 403
         )
         self.assertEqual(self.client.delete("/api/operadoras/326305", headers=h).status_code, 403)
-        self.assertIn("dados.exportar", me["permissoes"])
+        self.assertNotIn("dados.exportar", me["permissoes"])
         self.assertNotIn("operadoras.criar", me["permissoes"])
 
     def test_regras_de_perfil_gravadas_no_banco(self):
@@ -478,9 +478,10 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         ruim = self.client.put("/api/auth/me", json={"foto": "data:image/gif;base64,AAA"}, headers=h)
         self.assertEqual(ruim.status_code, 400)
 
-    def test_exportacao_csv_admin_e_colaborador(self):
-        for email, senha in (("admin@intuitivecare.com.br", "Admin@2025"),
-                             ("colaborador@intuitivecare.com.br", "Colaborador@2025")):
+    def test_exportacao_csv_somente_admin(self):
+        colab = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))
+        self.assertEqual(self.client.get("/api/operadoras/exportar.csv", headers=colab).status_code, 403)
+        for email, senha in (("admin@intuitivecare.com.br", "Admin@2025"),):
             h = self._auth_headers(self._login(email, senha))
             res = self.client.get("/api/operadoras/exportar.csv", headers=h)
             self.assertEqual(res.status_code, 200)

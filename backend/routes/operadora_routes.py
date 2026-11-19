@@ -45,6 +45,7 @@ def resumo_operadoras():
 
 @operadora_bp.route("/exportar.csv", methods=["GET"])
 @token_required
+@permissao_required("dados.exportar")
 def exportar_operadoras():
     conteudo = OperadoraService.exportar_csv(
         search=request.args.get("search", ""),

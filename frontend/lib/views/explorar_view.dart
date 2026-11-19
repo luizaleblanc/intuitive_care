@@ -163,11 +163,14 @@ class _BarraControles extends StatelessWidget {
     final f = vm.filtros;
     final anos = [for (final a in dados.anosDisponiveis.reversed) (a, '$a')];
     final (ini, fim) = vm.intervalo;
+    final podeExportar = context.watch<AuthViewModel>().currentUser?.pode('dados.exportar') ?? false;
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 12,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Linha 1: período
+        Wrap(
+        spacing: 12,
+        runSpacing: 10,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Row(mainAxisSize: MainAxisSize.min, children: [
@@ -243,6 +246,13 @@ class _BarraControles extends StatelessWidget {
               semanticLabel: 'Quantidade de anos',
               onChanged: (n) => vm.aplicar(f.copyWith(ultimos: n)),
             ),
+        ]),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 14),
+          child: Divider(height: 1, color: AppColors.slate100),
+        ),
+        // Linha 2: visualização, comparação e ferramentas
+        Row(children: [
           SizedBox(
             width: 230,
             child: SegmentedPill<String>(
@@ -251,11 +261,15 @@ class _BarraControles extends StatelessWidget {
               onChanged: (g) => vm.aplicar(f.copyWith(granularidade: g)),
             ),
           ),
+          const SizedBox(width: 16),
           _Interruptor(
             ligado: f.comparar,
             rotulo: 'Comparar com período anterior',
             onChanged: (v) => vm.aplicar(f.copyWith(comparar: v)),
           ),
+          const SizedBox(width: 12),
+          if (vm.isLoading) const Spinner(),
+          const Spacer(),
           AppButton(
             f.avancadosAtivos == 0 ? 'Filtros avançados' : 'Filtros avançados (${f.avancadosAtivos})',
             icon: LucideIcons.slidersHorizontal,
@@ -263,6 +277,7 @@ class _BarraControles extends StatelessWidget {
             size: ButtonSize.sm,
             onPressed: () => _abrirFiltros(context, vm, dados),
           ),
+          const SizedBox(width: 8),
           AppButton(
             'Personalizar gráficos',
             icon: LucideIcons.chartNoAxesCombined,
@@ -270,9 +285,15 @@ class _BarraControles extends StatelessWidget {
             size: ButtonSize.sm,
             onPressed: () => _abrirConstrutor(context, vm),
           ),
-          if (vm.isLoading) const Spinner(),
-        ],
-      ),
+          if (!podeExportar) ...[
+            const SizedBox(width: 8),
+            const Tooltip(
+              message: 'Exportação disponível apenas para o perfil Administrador.',
+              child: Pill('Somente consulta', tone: PillTone.sage, icon: LucideIcons.eye),
+            ),
+          ],
+        ]),
+      ]),
     );
   }
 }

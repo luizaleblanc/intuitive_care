@@ -205,8 +205,10 @@ class _TopbarState extends State<_Topbar> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthViewModel>().currentUser;
     final acoes = context.watch<ShellActions>();
-    // Exportação disponível para Administrador e Colaborador (exceto na tela de Perfil).
-    final mostrarExportar = widget.pagina.rota != '/perfil' && acoes.exportar != null;
+    // Exportação é exclusiva do perfil Administrador (permissão dados.exportar).
+    final mostrarExportar = widget.pagina.rota != '/perfil' &&
+        acoes.exportar != null &&
+        (user?.pode('dados.exportar') ?? false);
 
     var subtitulo = widget.pagina.subtitulo;
     if (widget.pagina.rota == '/painel') {
