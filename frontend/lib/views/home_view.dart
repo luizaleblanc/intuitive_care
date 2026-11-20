@@ -5,7 +5,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../app/theme.dart';
 import '../shared/brand/brand.dart';
 import '../shared/ui/ui.dart';
-import '../shared/utils/exporter.dart';
 
 /// Página inicial (/) — limpa, centralizada, sem dados nem números (seção 7.1).
 class HomeView extends StatelessWidget {
@@ -32,24 +31,8 @@ class HomeView extends StatelessWidget {
             constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height),
             child: Column(
               children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1200),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: pad, vertical: 20),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: AppButton(
-                          'Design System',
-                          icon: LucideIcons.layoutGrid,
-                          onPressed: () => abrirNovaAba('design-system.html'),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(pad, mobile ? 24 : 40, pad, 64),
+                  padding: EdgeInsets.fromLTRB(pad, mobile ? 40 : 72, pad, 64),
                   child: Column(
                     children: [
                       Stack(

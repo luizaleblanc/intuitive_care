@@ -29,24 +29,10 @@ class AuthRepository {
         _authService = authService,
         _storageService = storageService;
 
+  /// Nunca restaura login automaticamente: descarta eventual token antigo e exige entrada manual.
   Future<UserModel?> restoreSession() async {
-    final token = await _storageService.readToken();
-    if (token == null || token.isEmpty) {
-      return null;
-    }
-    _apiClient.setAuthToken(token);
-    try {
-      final res = await _authService.fetchAuthenticatedUser();
-      final userMap = res['usuario'] as Map<String, dynamic>?;
-      if (userMap == null) {
-        await clearLocalSession();
-        return null;
-      }
-      return UserModel.fromJson(userMap);
-    } catch (_) {
-      await clearLocalSession();
-      return null;
-    }
+    await clearLocalSession();
+    return null;
   }
 
   Future<AuthSessionResult> login({
@@ -57,7 +43,8 @@ class AuthRepository {
     final token = (res['token'] ?? '').toString();
     final user = UserModel.fromJson(res['usuario'] as Map<String, dynamic>);
     _apiClient.setAuthToken(token);
-    await _storageService.saveToken(token);
+    // Sessão mantida apenas em memória: ao reabrir o sistema, cai sempre na tela de login.
+    await _storageService.clearToken();
     return AuthSessionResult(
       token: token,
       user: user,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../app/theme.dart';
 import '../shared/ui/ui.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../views/app_shell.dart';
@@ -16,22 +17,24 @@ import '../views/register_view.dart';
 
 const _rotasSoVisitante = {'/login', '/cadastro'};
 // O reset fica acessível mesmo com sessão aberta: o link pode ser aberto no navegador já logado.
-const _rotasPublicas = {'/', '/esqueci-senha', '/redefinir-senha', ..._rotasSoVisitante};
+const _rotasPublicas = {'/', '/inicio', '/esqueci-senha', '/redefinir-senha', ..._rotasSoVisitante};
 
-/// Rotas do MVP (seção 6): públicas (/ e /login) e autenticadas dentro do AppShell.
+/// Rotas do MVP (seção 6): entra direto em /login e rotas autenticadas dentro do AppShell.
 GoRouter buildRouter(AuthViewModel auth) => GoRouter(
-      initialLocation: '/',
+      initialLocation: '/login',
       refreshListenable: auth,
       redirect: (context, state) {
         final rota = state.matchedLocation;
         if (auth.status == AuthStatus.initializing) return null;
         final logado = auth.status == AuthStatus.authenticated;
+        if (rota == '/') return logado ? '/painel' : '/login';
         if (!logado && !_rotasPublicas.contains(rota)) return '/login';
         if (logado && _rotasSoVisitante.contains(rota)) return '/painel';
         return null;
       },
       routes: [
-        GoRoute(path: '/', builder: (_, _) => const HomeView()),
+        GoRoute(path: '/', redirect: (_, _) => '/login'),
+        GoRoute(path: '/inicio', builder: (_, _) => const HomeView()),
         GoRoute(path: '/login', builder: (_, s) => LoginView(emailInicial: s.extra as String?)),
         GoRoute(path: '/cadastro', builder: (_, _) => const RegisterView()),
         GoRoute(path: '/esqueci-senha', builder: (_, _) => const ForgotPasswordView()),
@@ -43,8 +46,15 @@ GoRouter buildRouter(AuthViewModel auth) => GoRouter(
           builder: (context, state, child) => ListenableBuilder(
             listenable: auth,
             builder: (context, _) {
+              AppColors.watchDark(context);
               if (auth.status == AuthStatus.initializing) {
-                return const Scaffold(body: LoadingBlock(label: 'Restaurando sessão...'));
+                return Scaffold(
+                  backgroundColor: AppColors.surface,
+                  body: const LoadingBlock(label: 'Restaurando sessão...'),
+                );
+              }
+              if (auth.status != AuthStatus.authenticated) {
+                return Scaffold(backgroundColor: AppColors.surface, body: const SizedBox.shrink());
               }
               return AppShell(location: state.matchedLocation, child: child);
             },

@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../app/theme.dart';
 import '../shared/brand/brand.dart';
 import '../shared/ui/ui.dart';
-import '../shared/utils/exporter.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import 'auth_layout.dart';
 
@@ -97,18 +96,9 @@ class _LoginViewState extends State<LoginView> {
               children: [
                 Flexible(
                   child: TextButton.icon(
-                    onPressed: () => context.go('/'),
+                    onPressed: () => context.go('/inicio'),
                     icon: Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
                     label: Text('Página inicial',
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
-                  ),
-                ),
-                const Spacer(),
-                Flexible(
-                  child: TextButton(
-                    onPressed: () => abrirNovaAba('design-system.html'),
-                    child: Text('Design System',
                         overflow: TextOverflow.ellipsis,
                         style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
                   ),

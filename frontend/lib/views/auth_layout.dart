@@ -175,7 +175,7 @@ class PainelForest extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   InkWell(
-                    onTap: () => context.go('/'),
+                    onTap: () => context.go('/inicio'),
                     child: const LogoHorizontal(negative: true, size: 40),
                   ),
                   const Spacer(),
