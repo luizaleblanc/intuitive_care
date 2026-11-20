@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intuitive_care_app/app/router.dart';
 import 'package:intuitive_care_app/repositories/auth_repository.dart';
 import 'package:intuitive_care_app/services/api_client.dart';
 import 'package:intuitive_care_app/services/auth_service.dart';
@@ -70,4 +71,35 @@ void main() {
       expect(find.text('Link de redefinição inválido.'), findsOneWidget);
     });
   }
+
+  testWidgets('Começar agora leva para a tela de login (não cadastro)', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final client = ApiClient();
+    final auth = AuthViewModel(
+      AuthRepository(apiClient: client, authService: AuthService(client), storageService: SessionStorageService()),
+    );
+    final router = buildRouter(auth);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(value: auth, child: MaterialApp.router(routerConfig: router)),
+    );
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+
+    expect(find.text('Começar agora'), findsOneWidget);
+    await tester.ensureVisible(find.text('Começar agora'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Começar agora'));
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+
+    expect(router.routeInformationProvider.value.uri.path, '/login');
+    expect(find.byType(LoginView), findsOneWidget);
+    expect(find.byType(RegisterView), findsNothing);
+    expect(find.text('Entrar'), findsWidgets);
+  });
 }
