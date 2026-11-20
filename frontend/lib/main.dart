@@ -136,8 +136,11 @@ class _IntuitiveCareAppState extends State<IntuitiveCareApp> {
             supportedLocales: const [Locale('pt', 'BR')],
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             builder: (context, child) {
-              AppColors.isDark = Theme.of(context).brightness == Brightness.dark;
-              return ToastOverlay(controller: _toast, child: child ?? const SizedBox());
+              AppColors.isDark = _theme.isDark;
+              return AppThemeScope(
+                isDark: _theme.isDark,
+                child: ToastOverlay(controller: _toast, child: child ?? const SizedBox()),
+              );
             },
           );
         },

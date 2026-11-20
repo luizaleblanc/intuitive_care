@@ -35,7 +35,10 @@ class _PerfilViewState extends State<PerfilView> {
   final _nascimento = TextEditingController();
   String? _foto;
   late PreferenciasModel _prefs;
+  int? _usuarioCarregadoId;
   bool _confirmarSaida = false;
+  bool _saindo = false;
+  bool _enviandoFoto = false;
   String? _erro;
 
   @override
@@ -44,8 +47,10 @@ class _PerfilViewState extends State<PerfilView> {
     _carregarDoUsuario();
   }
 
-  void _carregarDoUsuario() {
-    final u = context.read<AuthViewModel>().currentUser!;
+  void _carregarDoUsuario([UserModel? usuario]) {
+    final u = usuario ?? context.read<AuthViewModel>().currentUser;
+    if (u == null) return;
+    _usuarioCarregadoId = u.id;
     _nome.text = u.nome;
     _email.text = u.email;
     _cargo.text = u.cargo ?? '';
@@ -72,15 +77,25 @@ class _PerfilViewState extends State<PerfilView> {
     }
   }
 
+  ToastController? _toast() {
+    try {
+      return context.read<ToastController>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
   Future<void> _alterarTema(String novoTema) async {
     final normalizado = ThemeController.normalizarTema(novoTema);
     setState(() => _prefs = _prefs.copyWith(tema: normalizado));
     _themeController()?.aplicar(normalizado, persistir: true);
-    final ok = await context.read<AuthViewModel>().updateTheme(normalizado);
+    final vm = context.read<AuthViewModel>();
+    final ok = await vm.updateTheme(normalizado);
     if (!mounted || ok) return;
-    final msg = context.read<AuthViewModel>().errorMessage;
+    final msg = vm.errorMessage;
     if (msg != null && msg.isNotEmpty) {
       setState(() => _erro = msg);
+      _toast()?.show(msg, error: true);
     }
   }
 
@@ -93,24 +108,58 @@ class _PerfilViewState extends State<PerfilView> {
   }
 
   Future<void> _escolherFoto() async {
-    final arquivo = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (_enviandoFoto) return;
+    final arquivo = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
     if (arquivo == null) return;
     final nome = arquivo.name.toLowerCase();
-    final mime = arquivo.mimeType ??
-        (nome.endsWith('.png') ? 'image/png' : (nome.endsWith('.jpg') || nome.endsWith('.jpeg') ? 'image/jpeg' : ''));
-    if (mime != 'image/png' && mime != 'image/jpeg') {
-      setState(() => _erro = 'Use uma imagem JPG ou PNG.');
+    final mimeBruto = (arquivo.mimeType ?? '').toLowerCase();
+    final mime = mimeBruto == 'image/png' || mimeBruto == 'image/jpeg' || mimeBruto == 'image/webp'
+        ? mimeBruto
+        : (nome.endsWith('.png')
+            ? 'image/png'
+            : (nome.endsWith('.jpg') || nome.endsWith('.jpeg')
+                ? 'image/jpeg'
+                : (nome.endsWith('.webp') ? 'image/webp' : '')));
+    if (mime.isEmpty) {
+      const msg = 'Use uma imagem JPG, PNG ou WebP.';
+      setState(() => _erro = msg);
+      _toast()?.show(msg, error: true);
       return;
     }
     final bytes = await arquivo.readAsBytes();
     if (bytes.length > 2 * 1024 * 1024) {
-      setState(() => _erro = 'A foto deve ter no máximo 2 MB.');
+      const msg = 'A foto deve ter no máximo 2 MB.';
+      setState(() => _erro = msg);
+      _toast()?.show(msg, error: true);
       return;
     }
+    final anterior = _foto;
+    final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
     setState(() {
       _erro = null;
-      _foto = 'data:$mime;base64,${base64Encode(bytes)}';
+      _foto = dataUrl;
+      _enviandoFoto = true;
     });
+
+    final vm = context.read<AuthViewModel>();
+    final ok = await vm.updatePhoto(dataUrl);
+    if (!mounted) return;
+    setState(() => _enviandoFoto = false);
+    if (ok) {
+      _toast()?.show('Foto de perfil atualizada');
+    } else {
+      final msg = vm.errorMessage ?? 'Não foi possível salvar a foto.';
+      setState(() {
+        _foto = anterior;
+        _erro = msg;
+      });
+      _toast()?.show(msg, error: true);
+    }
   }
 
   Future<void> _selecionarData() async {
@@ -131,7 +180,7 @@ class _PerfilViewState extends State<PerfilView> {
 
   Future<void> _salvar() async {
     final vm = context.read<AuthViewModel>();
-    final toast = context.read<ToastController>();
+    final toast = _toast();
     final antes = vm.currentUser;
     final ufAnterior = antes?.preferencias.ufPadrao;
     final triAnterior = antes?.preferencias.trimestrePadrao;
@@ -166,17 +215,27 @@ class _PerfilViewState extends State<PerfilView> {
             forcar: true,
           );
         }
-        setState(_carregarDoUsuario);
+        setState(() => _carregarDoUsuario(atualizado));
       }
-      toast.show('Perfil atualizado');
+      toast?.show('Perfil atualizado');
     } else {
-      setState(() => _erro = vm.errorMessage);
+      final msg = vm.errorMessage ?? 'Não foi possível salvar as alterações.';
+      setState(() => _erro = msg);
+      toast?.show(msg, error: true);
     }
   }
 
   Future<void> _sair() async {
+    if (_saindo) return;
+    setState(() => _saindo = true);
     await context.read<AuthViewModel>().logout();
-    if (mounted) context.go('/login');
+    // O GoRouter já redireciona para /login via refreshListenable; só força se ainda montado fora de /login.
+    if (mounted) {
+      final router = GoRouter.maybeOf(context);
+      if (router != null && router.routeInformationProvider.value.uri.path != '/login') {
+        router.go('/login');
+      }
+    }
   }
 
   @override
@@ -185,6 +244,9 @@ class _PerfilViewState extends State<PerfilView> {
     final vm = context.watch<AuthViewModel>();
     final u = vm.currentUser;
     if (u == null) return const SizedBox.shrink();
+    if (_usuarioCarregadoId != u.id) {
+      _carregarDoUsuario(u);
+    }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,13 +279,16 @@ class _PerfilViewState extends State<PerfilView> {
                   AppButton('Cancelar',
                       variant: ButtonVariant.secondary,
                       onPressed: () {
-                        setState(_carregarDoUsuario);
+                        setState(() => _carregarDoUsuario(u));
                         _themeController()?.aplicar(u.preferencias.tema, persistir: true);
-                        context.read<ToastController>().show('Alterações descartadas');
+                        _toast()?.show('Alterações descartadas');
                       }),
                   const SizedBox(width: 8),
                   AppButton('Salvar alterações',
-                      icon: LucideIcons.check, loading: vm.isLoading, loadingLabel: 'Salvando...', onPressed: _salvar),
+                      icon: LucideIcons.check,
+                      loading: vm.isLoading && !_saindo,
+                      loadingLabel: 'Salvando...',
+                      onPressed: _saindo ? null : _salvar),
                 ],
               ),
             ],
@@ -291,13 +356,21 @@ class _PerfilViewState extends State<PerfilView> {
                                 shape: BoxShape.circle,
                                 border: Border.all(color: AppColors.card, width: 4),
                               ),
-                              child: AppIconButton(
-                                icon: LucideIcons.camera,
-                                label: 'Alterar foto (JPG ou PNG, até 2 MB)',
-                                background: AppColors.primaryBg,
-                                foreground: Colors.white,
-                                onPressed: _escolherFoto,
-                              ),
+                              child: _enviandoFoto
+                                  ? Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(color: AppColors.primaryBg, shape: BoxShape.circle),
+                                      alignment: Alignment.center,
+                                      child: const Spinner(size: 16, color: Colors.white),
+                                    )
+                                  : AppIconButton(
+                                      icon: LucideIcons.camera,
+                                      label: 'Alterar foto (JPG, PNG ou WebP, até 2 MB)',
+                                      background: AppColors.primaryBg,
+                                      foreground: Colors.white,
+                                      onPressed: _escolherFoto,
+                                    ),
                             ),
                           ),
                         ],
@@ -343,14 +416,18 @@ class _PerfilViewState extends State<PerfilView> {
             Align(
               alignment: Alignment.centerLeft,
               child: _confirmarSaida
-                  ? Row(children: [
+                  ? Wrap(spacing: 8, runSpacing: 8, children: [
                       AppButton('Cancelar',
                           size: ButtonSize.sm,
                           variant: ButtonVariant.secondary,
-                          onPressed: () => setState(() => _confirmarSaida = false)),
-                      const SizedBox(width: 8),
+                          onPressed: _saindo ? null : () => setState(() => _confirmarSaida = false)),
                       AppButton('Confirmar saída',
-                          size: ButtonSize.sm, variant: ButtonVariant.dangerSolid, icon: LucideIcons.logOut, onPressed: _sair),
+                          size: ButtonSize.sm,
+                          variant: ButtonVariant.dangerSolid,
+                          icon: LucideIcons.logOut,
+                          loading: _saindo,
+                          loadingLabel: 'Saindo...',
+                          onPressed: _sair),
                     ])
                   : AppButton('Encerrar sessão',
                       size: ButtonSize.sm,
@@ -514,11 +591,11 @@ class _PerfilViewState extends State<PerfilView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Relatório personalizado (planilha)',
+                        Text('Relatório personalizado (planilha ETL)',
                             style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.sageText)),
                         const SizedBox(height: 2),
                         Text(
-                          'Monte e exporte um relatório conciso com os dados extraídos da ANS por período, seções, métricas e filtros.',
+                          'Exporte planilhas XLSX/CSV robustas construídas diretamente das bases do ETL da ANS (demonstrações, plano de contas, beneficiários, CADOP e lotes), com fórmulas e gráficos.',
                           style: AppText.sans(12, color: AppColors.sageMuted),
                         ),
                       ],

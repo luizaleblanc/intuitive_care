@@ -208,6 +208,7 @@ class _TopbarState extends State<_Topbar> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final user = context.watch<AuthViewModel>().currentUser;
     final acoes = context.watch<ShellActions>();
     // Exportação é exclusiva do perfil Administrador (permissão dados.exportar).

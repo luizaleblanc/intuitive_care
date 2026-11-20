@@ -517,6 +517,27 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         tema_invalido = self.client.put("/api/auth/me", json={"preferencias": {"tema": "sistema"}}, headers=h)
         self.assertEqual(tema_invalido.status_code, 400)
 
+        # Persiste foto WebP, telefone e preferências e mantém após novo login (Colaborador).
+        res_foto = self.client.put(
+            "/api/auth/me",
+            json={
+                "telefone": "(83) 99999-1234",
+                "foto": "data:image/webp;base64,UklGRh4AAABXRUJQ",
+                "preferencias": {"tema": "escuro", "uf_padrao": "PB", "trimestre_padrao": 2},
+            },
+            headers=h,
+        )
+        self.assertEqual(res_foto.status_code, 200, res_foto.get_json())
+        self.assertEqual(self.client.post("/api/auth/logout", headers=h).status_code, 200)
+        h_novo = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))
+        recarregado = self.client.get("/api/auth/me", headers=h_novo).get_json()["usuario"]
+        self.assertEqual(recarregado["cargo"], "Analista Externo")
+        self.assertEqual(recarregado["telefone"], "(83) 99999-1234")
+        self.assertEqual(recarregado["foto"], "data:image/webp;base64,UklGRh4AAABXRUJQ")
+        self.assertEqual(recarregado["preferencias"]["tema"], "escuro")
+        self.assertEqual(recarregado["preferencias"]["uf_padrao"], "PB")
+        self.assertEqual(recarregado["preferencias"]["trimestre_padrao"], 2)
+
         admin = self._auth_headers(self._login("admin@intuitivecare.com.br", "Admin@2025"))
         res_admin = self.client.put(
             "/api/auth/me",

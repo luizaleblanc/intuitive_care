@@ -10,7 +10,7 @@ enum AuthStatus { initializing, unauthenticated, authenticated }
 class AuthViewModel extends ChangeNotifier {
   final AuthRepository _repository;
 
-  AuthStatus _status = AuthStatus.initializing;
+  AuthStatus _status = AuthStatus.unauthenticated;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -31,18 +31,11 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Garante início sempre deslogado (sem auto-login), removendo tokens antigos do storage.
   Future<void> initializeSession() async {
-    _status = AuthStatus.initializing;
-    notifyListeners();
-
-    final user = await _repository.restoreSession();
-    if (user != null) {
-      _currentUser = user;
-      _status = AuthStatus.authenticated;
-    } else {
-      _currentUser = null;
-      _status = AuthStatus.unauthenticated;
-    }
+    await _repository.restoreSession();
+    _currentUser = null;
+    _status = AuthStatus.unauthenticated;
     notifyListeners();
   }
 
@@ -119,11 +112,16 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _currentUser = await _repository.updateProfile(campos);
+      final atualizado = await _repository.updateProfile(campos);
+      if (_status != AuthStatus.authenticated) return false;
+      _currentUser = atualizado;
       _successMessage = 'Perfil atualizado';
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
+      return false;
+    } catch (e) {
+      _errorMessage = 'Não foi possível salvar o perfil: $e';
       return false;
     } finally {
       _isLoading = false;
@@ -131,13 +129,35 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  /// Persiste a foto de perfil imediatamente sem interferir nos outros campos em edição.
+  Future<bool> updatePhoto(String? foto) async {
+    _errorMessage = null;
+    try {
+      final atualizado = await _repository.updateProfile({'foto': foto});
+      if (_status != AuthStatus.authenticated) return false;
+      _currentUser = atualizado;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Não foi possível atualizar a foto: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Persiste apenas a troca de tema sem bloquear o formulário de perfil.
   Future<bool> updateTheme(String tema) async {
     final normalizado = tema == 'escuro' ? 'escuro' : 'claro';
     try {
-      _currentUser = await _repository.updateProfile({
+      final atualizado = await _repository.updateProfile({
         'preferencias': {'tema': normalizado},
       });
+      if (_status != AuthStatus.authenticated) return false;
+      _currentUser = atualizado;
       notifyListeners();
       return true;
     } on ApiException catch (e) {

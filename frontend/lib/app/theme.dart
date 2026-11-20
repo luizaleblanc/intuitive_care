@@ -35,13 +35,31 @@ class ThemeController extends ChangeNotifier {
   }
 }
 
+/// Escopo herdado que propaga o modo escuro de forma síncrona (sem atraso do AnimatedTheme).
+class AppThemeScope extends InheritedWidget {
+  final bool isDark;
+  const AppThemeScope({super.key, required this.isDark, required super.child});
+
+  static bool? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppThemeScope>()?.isDark;
+
+  @override
+  bool updateShouldNotify(covariant AppThemeScope oldWidget) => oldWidget.isDark != isDark;
+}
+
 /// Design tokens do MVP (seção 3 da especificação) com suporte completo ao modo escuro.
 abstract final class AppColors {
-  /// Estado global sincronizado pelo [ThemeController] e pelo [MaterialApp].
+  /// Estado global sincronizado pelo [ThemeController] e pelo [AppThemeScope].
   static bool isDark = false;
 
-  /// Lê o brilho atual do [Theme] (subscrevendo o widget a trocas de tema).
-  static bool watchDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
+  /// Lê o brilho atual do [AppThemeScope] (ou [Theme] em testes isolados),
+  /// subscrevendo o widget a trocas imediatas de tema.
+  static bool watchDark(BuildContext context) {
+    final scoped = AppThemeScope.maybeOf(context);
+    final dark = scoped ?? (Theme.of(context).brightness == Brightness.dark);
+    isDark = dark;
+    return dark;
+  }
 
   // Cores institucionais fixas (símbolo, acentos e cartões hero).
   static const forest = Color(0xFF113E32);

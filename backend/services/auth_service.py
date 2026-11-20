@@ -181,9 +181,14 @@ class AuthService:
         if "data_nascimento" in data:
             valor = (data.get("data_nascimento") or "").strip()
             if valor:
-                try:
-                    nascimento = datetime.strptime(valor[:10], "%Y-%m-%d").date()
-                except ValueError:
+                nascimento = None
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+                    try:
+                        nascimento = datetime.strptime(valor[:10], fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                if nascimento is None:
                     raise BusinessRuleError("Data de nascimento inválida. Use o formato AAAA-MM-DD.", 400)
                 if nascimento > datetime.now().date():
                     raise BusinessRuleError("A data de nascimento não pode estar no futuro.", 400)
@@ -194,8 +199,8 @@ class AuthService:
         if "foto" in data:
             foto = data.get("foto")
             if foto:
-                if not re.match(r"^data:image/(png|jpe?g);base64,", str(foto)):
-                    raise BusinessRuleError("A foto deve ser uma imagem JPG ou PNG.", 400)
+                if not re.match(r"^data:image/(png|jpe?g|webp);base64,", str(foto)):
+                    raise BusinessRuleError("A foto deve ser uma imagem JPG, PNG ou WebP.", 400)
                 # Base64 ocupa ~4/3 do arquivo original: 2 MB -> ~2,8 MB de texto.
                 if len(foto) > 2_800_000:
                     raise BusinessRuleError("A foto deve ter no máximo 2 MB.", 400)
