@@ -80,7 +80,7 @@ void main() {
     });
   }
 
-  testWidgets('Entrada do sistema cai direto no login e nunca faz auto-login', (tester) async {
+  testWidgets('Entrada do sistema cai na página inicial e nunca faz auto-login', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -111,16 +111,24 @@ void main() {
     await tester.pumpAndSettle();
     ignorarFontes(tester);
 
-    expect(router.routeInformationProvider.value.uri.path, '/login');
-    expect(find.byType(LoginView), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, '/inicio');
+    expect(find.byType(HomeView), findsOneWidget);
 
-    // Mesmo navegando para '/', redireciona para '/login'.
+    // Navegando para '/', redireciona para a página inicial.
     router.go('/');
     await tester.pumpAndSettle();
+    ignorarFontes(tester);
+    expect(router.routeInformationProvider.value.uri.path, '/inicio');
+    expect(find.byType(HomeView), findsOneWidget);
+
+    // Rota protegida sem sessão continua exigindo login.
+    router.go('/painel');
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
     expect(router.routeInformationProvider.value.uri.path, '/login');
     expect(find.byType(LoginView), findsOneWidget);
 
-    // Página inicial em /inicio ainda leva para /login via Começar agora.
+    // Começar agora leva para Criar conta.
     router.go('/inicio');
     await tester.pumpAndSettle();
     ignorarFontes(tester);
@@ -131,10 +139,9 @@ void main() {
     await tester.pumpAndSettle();
     ignorarFontes(tester);
 
-    expect(router.routeInformationProvider.value.uri.path, '/login');
-    expect(find.byType(LoginView), findsOneWidget);
-    expect(find.byType(RegisterView), findsNothing);
-    expect(find.text('Entrar'), findsWidgets);
+    expect(router.routeInformationProvider.value.uri.path, '/criar-conta');
+    expect(find.byType(RegisterView), findsOneWidget);
+    expect(find.byType(LoginView), findsNothing);
   });
 
   testWidgets('AppMultiSelect permite marcar mais de uma opção e aplicar', (tester) async {
