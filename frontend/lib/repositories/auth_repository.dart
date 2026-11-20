@@ -60,7 +60,7 @@ class AuthRepository {
     String? cargo,
   }) async {
     final res = await _authService.register(nome: nome, email: email, senha: senha, cargo: cargo);
-    return (res['mensagem'] ?? 'Cadastro efetuado').toString();
+    return (res['mensagem'] ?? 'Conta criada').toString();
   }
 
   Future<UserModel> refreshUser() async {

@@ -182,7 +182,7 @@ class _LoginViewState extends State<LoginView> {
                           const SizedBox(height: 16),
                           Center(
                             child: TextButton(
-                              onPressed: () => context.go('/cadastro'),
+                              onPressed: () => context.go('/criar-conta'),
                               child: Text('Não tem conta? Criar conta',
                                   style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.brandText)),
                             ),

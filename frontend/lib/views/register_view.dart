@@ -9,7 +9,7 @@ import '../shared/utils/senha.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import 'auth_layout.dart';
 
-/// Cadastro (/cadastro): toda conta nova entra com o perfil Colaborador.
+/// Criar conta (/criar-conta): toda conta nova entra com o perfil Colaborador.
 class RegisterView extends StatefulWidget {
   const RegisterView({super.key});
 
@@ -75,6 +75,8 @@ class _RegisterViewState extends State<RegisterView> {
     return AuthLayout(
       titulo: 'Criar conta',
       subtitulo: 'Seu acesso começa com o perfil Colaborador.',
+      voltarRota: '/inicio',
+      voltarRotulo: 'Voltar à tela inicial',
       children: [
         LabeledField(
           label: 'Nome completo',
@@ -149,6 +151,14 @@ class _RegisterViewState extends State<RegisterView> {
           loading: loading,
           loadingLabel: 'Criando conta...',
           onPressed: _valido ? _cadastrar : null,
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: TextButton(
+            onPressed: () => context.go('/login'),
+            child: Text('Já tem conta? Entrar',
+                style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.brandText)),
+          ),
         ),
       ],
     );

@@ -97,7 +97,7 @@ class HomeView extends StatelessWidget {
                         'Começar agora',
                         size: ButtonSize.lg,
                         iconRight: LucideIcons.arrowRight,
-                        onPressed: () => context.go('/login'),
+                        onPressed: () => context.go('/criar-conta'),
                       ),
                       const SizedBox(height: 16),
                       Text('Acesso para administradores e analistas.',

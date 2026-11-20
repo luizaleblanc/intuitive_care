@@ -14,7 +14,18 @@ class AuthLayout extends StatelessWidget {
   final String subtitulo;
   final List<Widget> children;
 
-  const AuthLayout({super.key, required this.titulo, required this.subtitulo, required this.children});
+  /// Destino e rótulo do link de volta no topo (padrão: login, usado na recuperação de senha).
+  final String voltarRota;
+  final String voltarRotulo;
+
+  const AuthLayout({
+    super.key,
+    required this.titulo,
+    required this.subtitulo,
+    required this.children,
+    this.voltarRota = '/login',
+    this.voltarRotulo = 'Voltar ao login',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -36,9 +47,9 @@ class AuthLayout extends StatelessWidget {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
-                        onPressed: () => context.go('/login'),
+                        onPressed: () => context.go(voltarRota),
                         icon: Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
-                        label: Text('Voltar ao login',
+                        label: Text(voltarRotulo,
                             style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
                       ),
                     ),

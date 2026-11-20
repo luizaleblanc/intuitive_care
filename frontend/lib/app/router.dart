@@ -15,7 +15,7 @@ import '../views/password_reset_views.dart';
 import '../views/perfil_view.dart';
 import '../views/register_view.dart';
 
-const _rotasSoVisitante = {'/login', '/cadastro'};
+const _rotasSoVisitante = {'/login', '/criar-conta'};
 // O reset fica acessível mesmo com sessão aberta: o link pode ser aberto no navegador já logado.
 const _rotasPublicas = {'/', '/inicio', '/esqueci-senha', '/redefinir-senha', ..._rotasSoVisitante};
 
@@ -28,6 +28,8 @@ GoRouter buildRouter(AuthViewModel auth) => GoRouter(
         if (auth.status == AuthStatus.initializing) return null;
         final logado = auth.status == AuthStatus.authenticated;
         if (rota == '/') return logado ? '/painel' : '/login';
+        // Endereço antigo da tela de criação de conta (favoritos e links já compartilhados).
+        if (rota == '/cadastro') return logado ? '/painel' : '/criar-conta';
         if (!logado && !_rotasPublicas.contains(rota)) return '/login';
         if (logado && _rotasSoVisitante.contains(rota)) return '/painel';
         return null;
@@ -36,7 +38,8 @@ GoRouter buildRouter(AuthViewModel auth) => GoRouter(
         GoRoute(path: '/', redirect: (_, _) => '/login'),
         GoRoute(path: '/inicio', builder: (_, _) => const HomeView()),
         GoRoute(path: '/login', builder: (_, s) => LoginView(emailInicial: s.extra as String?)),
-        GoRoute(path: '/cadastro', builder: (_, _) => const RegisterView()),
+        GoRoute(path: '/criar-conta', builder: (_, _) => const RegisterView()),
+        GoRoute(path: '/cadastro', redirect: (_, _) => '/criar-conta'),
         GoRoute(path: '/esqueci-senha', builder: (_, _) => const ForgotPasswordView()),
         GoRoute(
           path: '/redefinir-senha',
