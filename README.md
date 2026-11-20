@@ -1,3 +1,5 @@
+<img width="1917" height="1007" alt="image" src="https://github.com/user-attachments/assets/8ec358b2-ece5-4411-8ff9-ae51693f5aed" />
+
 # Intuitive Care — Plataforma de Análise e Gestão de Dados da ANS
 
 Sistema computacional completo composto por **Aplicativo Flutter (Arquitetura MVVM + Provider, web desktop e mobile)**, **API REST em Python + Flask (Arquitetura em Camadas)**, **Pipeline ETL em Python com dados reais da ANS** e **Banco de Dados Relacional MySQL 8.0**.
