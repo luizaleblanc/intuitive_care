@@ -55,6 +55,11 @@ def _url_conexao() -> str:
     )
 
 
+def _executar_em_lotes(conn, sql, registros, tamanho: int = 2000) -> None:
+    for i in range(0, len(registros), tamanho):
+        conn.execute(sql, registros[i : i + tamanho])
+
+
 def _registros(df: pd.DataFrame, colunas):
     """Converte para dicts trocando NaN por None (aceito pelo driver)."""
     saida = []
@@ -191,16 +196,20 @@ def carregar_beneficiarios(conn) -> None:
     fechamento = tabela[tabela["MES"].str[4:].isin(["03", "06", "09", "12"])].copy()
     fechamento["ano"] = fechamento["MES"].str[:4].astype(int)
     fechamento["trimestre"] = fechamento["MES"].str[4:].astype(int) // 3
-    fechamento = fechamento[fechamento["ano"] >= fechamento["ano"].max() - 2]
+    demo_csv = os.path.join(DATA, "demonstracoes_operadora.csv")
+    if os.path.exists(demo_csv):
+        ano_minimo = int(pd.read_csv(demo_csv, usecols=["ano"])["ano"].min())
+        fechamento = fechamento[fechamento["ano"] >= ano_minimo]
     conn.execute(text("DELETE FROM beneficiarios_trimestre"))
-    conn.execute(
+    _executar_em_lotes(
+        conn,
         text("INSERT INTO beneficiarios_trimestre (reg_ans, ano, trimestre, medico_hospitalar, odontologico) "
              "VALUES (:r, :a, :t, :mh, :od)"),
         [{"r": r.CD_OPERADORA, "a": int(r.ano), "t": int(r.trimestre), "mh": int(r.mh), "od": int(r.odonto)}
          for r in fechamento.itertuples()],
     )
     print(f"Beneficiários: competência {ultimo_mes[4:]}/{ultimo_mes[:4]} · "
-          f"{int(atual['mh'].sum()):,} médico-hospitalares".replace(",", "."))
+          f"{int(atual['mh'].sum()):,} médico-hospitalares ({len(fechamento)} trimestres)".replace(",", "."))
 
 
 def carregar_contabil(conn) -> None:
@@ -216,7 +225,8 @@ def carregar_contabil(conn) -> None:
     conn.execute(text("DELETE FROM demonstracoes_operadora"))
     cols = ["reg_ans", "ano", "trimestre", "contraprestacoes", "eventos", "eventos_mh", "comercializacao",
             "administrativas"]
-    conn.execute(
+    _executar_em_lotes(
+        conn,
         text(f"INSERT INTO demonstracoes_operadora ({', '.join(cols)}) VALUES ({', '.join(':' + c for c in cols)})"),
         _registros(demo, cols),
     )
@@ -225,7 +235,8 @@ def carregar_contabil(conn) -> None:
     conn.execute(text("DELETE FROM contas_setor"))
     cols = ["ano", "trimestre", "codigo", "descricao", "nivel", "valor"]
     setor["descricao"] = setor["descricao"].fillna("").str[:255]
-    conn.execute(
+    _executar_em_lotes(
+        conn,
         text(f"INSERT INTO contas_setor ({', '.join(cols)}) VALUES ({', '.join(':' + c for c in cols)})"),
         _registros(setor, cols),
     )
@@ -248,7 +259,8 @@ def carregar_contabil(conn) -> None:
     # Tabela de lançamentos (CRUD de despesas): conta 41 por operadora/trimestre.
     conn.execute(text("DELETE FROM despesas WHERE descricao = 'Importação ETL ANS'"))
     lanc = demo[demo["eventos"] > 0].rename(columns={"eventos": "valor_despesa"})
-    conn.execute(
+    _executar_em_lotes(
+        conn,
         text("INSERT INTO despesas (reg_ans, ano, trimestre, valor_despesa, categoria, descricao) "
              "VALUES (:reg_ans, :ano, :trimestre, :valor_despesa, 'Eventos Indenizáveis Líquidos', "
              "'Importação ETL ANS')"),

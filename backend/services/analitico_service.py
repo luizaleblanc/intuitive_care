@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from backend.repositories.analitico_repository import AnaliticoRepository
 from backend.services.validators import BusinessRuleError
@@ -41,90 +41,174 @@ def _iso(valor: Any) -> Optional[str]:
     return str(valor) if valor else None
 
 
-def _resolver_periodo(ano: Optional[int], trimestre: Optional[int]) -> Tuple[Periodo, List[Periodo]]:
+def _norm_ints(unico: Optional[int], multiplos: Optional[Sequence[int]]) -> List[int]:
+    if multiplos:
+        return list(dict.fromkeys(int(x) for x in multiplos))
+    return [int(unico)] if unico is not None else []
+
+
+def _norm_strs(unico: Union[str, Sequence[str], None], multiplos: Optional[Sequence[str]] = None) -> List[str]:
+    if multiplos:
+        return [s.strip() for s in multiplos if str(s).strip()]
+    if isinstance(unico, str):
+        return [s.strip() for s in unico.split(",") if s.strip()]
+    if unico:
+        return [str(s).strip() for s in unico if str(s).strip()]
+    return []
+
+
+def _resolver_periodos(
+    anos: Sequence[int], trimestres: Sequence[int]
+) -> Tuple[List[Periodo], List[Periodo], List[Periodo]]:
     periodos = AnaliticoRepository.periodos()
     if not periodos:
         raise BusinessRuleError("Nenhuma demonstração contábil carregada. Execute o ETL.", 404)
-    if ano is None and trimestre is None:
-        return periodos[0], periodos
-    candidatos = [p for p in periodos if (ano is None or p[0] == ano) and (trimestre is None or p[1] == trimestre)]
-    if not candidatos:
-        raise BusinessRuleError("Não há dados da ANS para o período selecionado.", 404)
-    return candidatos[0], periodos
+    if not anos and not trimestres:
+        selecionados = [periodos[0]]
+    else:
+        anos_set = set(anos)
+        tris_set = set(trimestres)
+        selecionados = [
+            p for p in periodos
+            if (not anos_set or p[0] in anos_set) and (not tris_set or p[1] in tris_set)
+        ]
+        if not selecionados:
+            raise BusinessRuleError("Não há dados da ANS para o período selecionado.", 404)
+        # Compatibilidade: ao passar apenas 1 ano sem trimestre, usa todos os trimestres daquele ano
+        # (ou múltiplos anos/trimestres selecionados pelo usuário).
+
+    if len(selecionados) == 1:
+        anteriores = [_anterior(selecionados[0])]
+    else:
+        anos_sel = [a for a, _ in selecionados]
+        span = max(anos_sel) - min(anos_sel) + 1
+        disponiveis = set(periodos)
+        anteriores = [(a - span, t) for a, t in selecionados if (a - span, t) in disponiveis]
+    return selecionados, anteriores, periodos
+
+
+def _resumir_lotes(lotes: List[Dict[str, Any]], selecionados: List[Periodo]) -> Dict[str, Any]:
+    if len(selecionados) == 1:
+        lote = lotes[0] if lotes else {}
+        return {
+            "registros_extraidos": int(lote.get("registros_extraidos") or 0),
+            "operadoras": int(lote.get("operadoras") or 0),
+            "carregado_em": _iso(lote.get("carregado_em")),
+            "auditado": bool(lote.get("auditado")),
+            "auditado_por": lote.get("auditado_por"),
+            "auditado_em": _iso(lote.get("auditado_em")),
+        }
+    return {
+        "registros_extraidos": sum(int(l.get("registros_extraidos") or 0) for l in lotes),
+        "operadoras": max((int(l.get("operadoras") or 0) for l in lotes), default=0),
+        "carregado_em": None,
+        "auditado": bool(lotes) and len(lotes) == len(selecionados) and all(bool(l.get("auditado")) for l in lotes),
+        "auditado_por": None,
+        "auditado_em": None,
+    }
 
 
 class AnaliticoService:
     """Indicadores do Painel e do plano de contas calculados a partir dos dados reais da ANS."""
 
     @staticmethod
-    def painel(ano: Optional[int], trimestre: Optional[int], uf: str = "", modalidade: str = "") -> Dict[str, Any]:
-        periodo, periodos = _resolver_periodo(ano, trimestre)
-        anterior = _anterior(periodo)
+    def painel(
+        ano: Optional[int] = None,
+        trimestre: Optional[int] = None,
+        uf: Union[str, Sequence[str]] = "",
+        modalidade: Union[str, Sequence[str]] = "",
+        anos: Optional[Sequence[int]] = None,
+        trimestres: Optional[Sequence[int]] = None,
+    ) -> Dict[str, Any]:
+        anos_sel = _norm_ints(ano, anos)
+        tris_sel = _norm_ints(trimestre, trimestres)
+        ufs = [u.upper() for u in _norm_strs(uf)]
+        modalidades = _norm_strs(modalidade)
+
+        selecionados, anteriores, periodos = _resolver_periodos(anos_sel, tris_sel)
+        periodo = selecionados[0]
+        anterior_ref = anteriores[0] if anteriores else _anterior(periodo)
         repo = AnaliticoRepository
 
-        # ---------------- visão Administrador (setor inteiro)
-        atual = repo.totais_periodo(periodo)
-        ant = repo.totais_periodo(anterior)
-        lote = repo.lote(periodo) or {}
-        lote_ant = repo.lote(anterior) or {}
-        modalidades = repo.por_modalidade(periodo)
-        total_mod = sum(m["valor"] for m in modalidades) or 1
+        # ---------------- visão Administrador (setor inteiro ou recorte de período)
+        atual = repo.totais_periodo(selecionados)
+        ant = repo.totais_periodo(anteriores) if anteriores else {"eventos": 0.0}
+        lotes_atual = repo.lotes(selecionados)
+        lotes_ant = repo.lotes(anteriores) if anteriores else []
+        reg_atual = sum(int(l.get("registros_extraidos") or 0) for l in lotes_atual)
+        reg_ant = sum(int(l.get("registros_extraidos") or 0) for l in lotes_ant)
+        modalidades_dist = repo.por_modalidade(selecionados)
+        total_mod = sum(m["valor"] for m in modalidades_dist) or 1
         admin = {
             "total_despesas": atual["eventos"],
             "total_despesas_anterior": ant["eventos"] or None,
-            "registros_extraidos": int(lote.get("registros_extraidos") or 0),
-            "registros_extraidos_anterior": int(lote_ant.get("registros_extraidos") or 0) or None,
+            "registros_extraidos": reg_atual,
+            "registros_extraidos_anterior": reg_ant or None,
             "operadoras_ativas": repo.operadoras_ativas(),
             "operadoras_com_demonstracao": int(atual["operadoras"]),
-            "serie": repo.serie("eventos", ate=periodo),
+            "serie": repo.serie("eventos", ate=periodo, selecionados=selecionados),
             "modalidades": [
-                {**m, "pct": round(m["valor"] / total_mod * 100, 1)} for m in modalidades
+                {**m, "pct": round(m["valor"] / total_mod * 100, 1)} for m in modalidades_dist
             ],
         }
 
-        # ---------------- visão Colaborador (filtros UF / modalidade)
-        c_atual = repo.totais_periodo(periodo, uf, modalidade)
-        c_ant = repo.totais_periodo(anterior, uf, modalidade)
-        sin = repo.sinistralidade_media(periodo, uf, modalidade)
-        sin_ant = repo.sinistralidade_media(anterior, uf, modalidade)
-        base_benef = repo.beneficiarios_com_despesa(periodo, uf, modalidade)
-        base_benef_ant = repo.beneficiarios_com_despesa(anterior, uf, modalidade)
+        # ---------------- visão Colaborador (filtros UF / modalidade / múltiplos anos e trimestres)
+        c_atual = repo.totais_periodo(selecionados, ufs, modalidades)
+        c_ant = repo.totais_periodo(anteriores, ufs, modalidades) if anteriores else {"eventos_mh": 0.0}
+        sin = repo.sinistralidade_media(selecionados, ufs, modalidades)
+        sin_ant = repo.sinistralidade_media(anteriores, ufs, modalidades) if anteriores else None
+        base_benef = repo.beneficiarios_com_despesa(selecionados, ufs, modalidades)
+        base_benef_ant = repo.beneficiarios_com_despesa(anteriores, ufs, modalidades) if anteriores else 0
         colaborador = {
             "despesas_mh": c_atual["eventos_mh"],
             "despesas_mh_anterior": c_ant["eventos_mh"] or None,
             "sinistralidade": sin,
             "sinistralidade_anterior": sin_ant,
-            "beneficiarios": repo.beneficiarios(periodo, uf, modalidade),
-            "beneficiarios_anterior": repo.beneficiarios(anterior, uf, modalidade) or None,
+            "beneficiarios": repo.beneficiarios(periodo, ufs, modalidades),
+            "beneficiarios_anterior": (repo.beneficiarios(anterior_ref, ufs, modalidades) or None) if anteriores else None,
             "ticket_medio": (c_atual["eventos_mh"] / base_benef) if base_benef else None,
             "ticket_medio_anterior": (c_ant["eventos_mh"] / base_benef_ant) if base_benef_ant else None,
-            "ranking": repo.ranking(periodo, uf, modalidade),
-            "serie": repo.serie("eventos_mh", ate=periodo, uf=uf, modalidade=modalidade),
+            "ranking": repo.ranking(selecionados, ufs, modalidades),
+            "serie": repo.serie("eventos_mh", ate=periodo, uf=ufs, modalidade=modalidades, selecionados=selecionados),
         }
 
         return {
             "periodo": _p(periodo),
-            "periodo_anterior": _p(anterior),
+            "periodo_anterior": _p(anterior_ref),
             "periodos": [_p(p) for p in periodos],
+            "periodos_selecionados": [_p(p) for p in selecionados],
             "admin": admin,
             "colaborador": colaborador,
         }
 
     @staticmethod
-    def contas(ano: Optional[int], trimestre: Optional[int], grupo: str = "") -> Dict[str, Any]:
-        periodo, periodos = _resolver_periodo(ano, trimestre)
-        anterior = _anterior(periodo)
-        if grupo and grupo not in GRUPOS_CONTAS:
-            raise BusinessRuleError("Grupo de contas inválido.", 400)
-        prefixos = [grupo] if grupo else list(GRUPOS_CONTAS)
+    def contas(
+        ano: Optional[int] = None,
+        trimestre: Optional[int] = None,
+        grupo: Union[str, Sequence[str]] = "",
+        anos: Optional[Sequence[int]] = None,
+        trimestres: Optional[Sequence[int]] = None,
+        grupos: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        anos_sel = _norm_ints(ano, anos)
+        tris_sel = _norm_ints(trimestre, trimestres)
+        grupos_sel = _norm_strs(grupo, grupos)
+        for g in grupos_sel:
+            if g not in GRUPOS_CONTAS:
+                raise BusinessRuleError("Grupo de contas inválido.", 400)
+        prefixos = grupos_sel if grupos_sel else list(GRUPOS_CONTAS)
+
+        selecionados, anteriores, periodos = _resolver_periodos(anos_sel, tris_sel)
+        periodo = selecionados[0]
+        anterior_ref = anteriores[0] if anteriores else _anterior(periodo)
 
         repo = AnaliticoRepository
-        atuais = repo.contas(periodo, prefixos)
-        anteriores = repo.contas(anterior, prefixos)
+        atuais = repo.contas(selecionados, prefixos)
+        anteriores_map = repo.contas(anteriores, prefixos) if anteriores else {}
 
         linhas = []
         for codigo, conta in atuais.items():
-            ant = anteriores.get(codigo)
+            ant = anteriores_map.get(codigo)
             linhas.append(
                 {
                     "codigo": codigo,
@@ -136,8 +220,8 @@ class AnaliticoService:
                 }
             )
 
-        kpi_atual = repo.contas(periodo, ["41", "43", "46"], max_nivel=0)
-        kpi_ant = repo.contas(anterior, ["41", "43", "46"], max_nivel=0)
+        kpi_atual = repo.contas(selecionados, ["41", "43", "46"], max_nivel=0)
+        kpi_ant = repo.contas(anteriores, ["41", "43", "46"], max_nivel=0) if anteriores else {}
         kpis = {
             c: {
                 "valor_atual": kpi_atual.get(c, {}).get("valor", 0.0),
@@ -146,7 +230,7 @@ class AnaliticoService:
             for c in ("41", "46", "43")
         }
 
-        comp = repo.composicao_mh(periodo)
+        comp = repo.composicao_mh(selecionados)
         total_comp = sum(v for v in comp.values() if v > 0) or 1
         composicao = sorted(
             (
@@ -172,24 +256,18 @@ class AnaliticoService:
             if len(destaques) == 3:
                 break
 
-        lote = repo.lote(periodo) or {}
+        lotes_atual = repo.lotes(selecionados)
         return {
             "periodo": _p(periodo),
-            "periodo_anterior": _p(anterior),
+            "periodo_anterior": _p(anterior_ref),
             "periodos": [_p(p) for p in periodos],
+            "periodos_selecionados": [_p(p) for p in selecionados],
             "grupos": [{"codigo": k, "nome": v} for k, v in GRUPOS_CONTAS.items()],
             "kpis": kpis,
             "contas": linhas,
             "composicao": composicao,
             "destaques": destaques,
-            "lote": {
-                "registros_extraidos": int(lote.get("registros_extraidos") or 0),
-                "operadoras": int(lote.get("operadoras") or 0),
-                "carregado_em": _iso(lote.get("carregado_em")),
-                "auditado": bool(lote.get("auditado")),
-                "auditado_por": lote.get("auditado_por"),
-                "auditado_em": _iso(lote.get("auditado_em")),
-            },
+            "lote": _resumir_lotes(lotes_atual, selecionados),
         }
 
     @staticmethod

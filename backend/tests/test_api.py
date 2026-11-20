@@ -377,6 +377,12 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         especificos = self.client.get("/api/explorar?anos=2026&granularidade=ano", headers=admin).get_json()
         self.assertEqual(especificos["periodo"]["anos"], [2026])
         self.assertEqual(self.client.get("/api/explorar?anos=2019,2026", headers=admin).status_code, 400)
+        tri1 = self.client.get("/api/explorar?anos=2026&trimestres=1", headers=admin).get_json()
+        self.assertEqual(tri1["kpis"]["despesas"], 100.0)
+        self.assertEqual(tri1["periodo"]["trimestres"], [1])
+        tris12 = self.client.get("/api/explorar?anos=2026&trimestres=1,2", headers=admin).get_json()
+        self.assertEqual(tris12["kpis"]["despesas"], 210.0)
+        self.assertEqual(self.client.get("/api/explorar?trimestres=5", headers=admin).status_code, 400)
 
         comp = self.client.get("/api/explorar?comparar=1", headers=admin).get_json()
         self.assertIsNone(comp["comparativo"]["kpis"])
@@ -456,6 +462,24 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
 
         cons = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))
         self.assertEqual(self.client.post("/api/contas/lotes/2026/1/auditar", headers=cons).status_code, 403)
+
+        # Múltiplos trimestres, UFs, modalidades e grupos de contas
+        painel_multi = self.client.get(
+            "/api/painel?ano=2026&trimestre=1,2&uf=SP,RJ&modalidade=Medicina%20de%20Grupo,Autogest%C3%A3o",
+            headers=admin,
+        ).get_json()
+        self.assertEqual(len(painel_multi["periodos_selecionados"]), 2)
+        self.assertAlmostEqual(painel_multi["admin"]["total_despesas"], 210.0)
+        self.assertAlmostEqual(painel_multi["colaborador"]["despesas_mh"], 210.0)
+
+        contas_multi = self.client.get("/api/contas?ano=2026&trimestre=1,2&grupo=41,46", headers=admin).get_json()
+        self.assertEqual(len(contas_multi["periodos_selecionados"]), 2)
+        self.assertAlmostEqual(contas_multi["kpis"]["41"]["valor_atual"], 210.0)
+
+        ops_multi = self.client.get(
+            "/api/operadoras?modalidade=Medicina%20de%20Grupo,Cooperativa%20M%C3%A9dica", headers=admin
+        ).get_json()
+        self.assertGreaterEqual(ops_multi["total"], 2)
 
     def test_perfil_preferencias_e_foto(self):
         h = self._auth_headers(self._login("colaborador@intuitivecare.com.br", "Colaborador@2025"))

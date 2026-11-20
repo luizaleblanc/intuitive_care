@@ -75,7 +75,7 @@ class _PainelViewState extends State<PainelView> {
     final p = context.read<PainelViewModel>().painel;
     final user = context.read<AuthViewModel>().currentUser;
     if (p == null || user == null) return;
-    final periodo = fmtPeriodo(p.periodo.ano, p.periodo.trimestre);
+    final periodo = fmtPeriodosSelecionados([for (final x in p.periodosSelecionados) (x.ano, x.trimestre)]);
     final vm = context.read<PainelViewModel>();
     final linhas = user.isAdmin
         ? <List<String>>[
@@ -121,7 +121,8 @@ class _PainelViewState extends State<PainelView> {
       ExportTable(
         titulo: 'Painel Geral · $periodo',
         subtitulo:
-            'UF: ${vm.uf.isEmpty ? 'Todas' : vm.uf} · Modalidade: ${vm.modalidade.isEmpty ? 'Todas' : vm.modalidade}',
+            'UF: ${vm.uf.isEmpty ? 'Todas' : vm.uf.replaceAll(',', ', ')} · '
+            'Modalidade: ${vm.modalidade.isEmpty ? 'Todas' : vm.modalidade.replaceAll(',', ', ')}',
         colunas: const ['Tipo', 'Descrição', 'Valor'],
         linhas: linhas,
       ),
@@ -149,7 +150,7 @@ class _PainelViewState extends State<PainelView> {
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
       opacity: vm.isLoading ? 0.6 : 1,
-      child: isAdmin ? _PainelAdmin(p) : _PainelColaborador(p, vm),
+      child: isAdmin ? _PainelAdmin(p, vm) : _PainelColaborador(p, vm),
     );
   }
 }
@@ -159,29 +160,68 @@ class _PainelViewState extends State<PainelView> {
 // ---------------------------------------------------------------------------
 class _PainelAdmin extends StatelessWidget {
   final PainelModel p;
-  const _PainelAdmin(this.p);
+  final PainelViewModel vm;
+  const _PainelAdmin(this.p, this.vm);
 
   @override
   Widget build(BuildContext context) {
-    final serie = p.serieAdmin.length > 8
+    final periodo = fmtPeriodosSelecionados([for (final x in p.periodosSelecionados) (x.ano, x.trimestre)]);
+    final multi = p.periodosSelecionados.length > 1;
+    final serie = !multi && p.serieAdmin.length > 8
         ? p.serieAdmin.sublist(p.serieAdmin.length - 8)
         : p.serieAdmin;
     final crescimento = serie.length >= 2
         ? variation(serie.last.valor, serie.first.valor)
         : null;
+    final trisDisp = vm.trimestresDosAnos(vm.anos);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        AppCard(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'Período',
+                  style: AppText.sans(14, weight: FontWeight.w600),
+                ),
+              ),
+              AppMultiSelect<int>(
+                semanticLabel: 'Anos',
+                icon: LucideIcons.calendarDays,
+                selected: vm.anos,
+                minSelected: 1,
+                options: [for (final a in vm.anosDisponiveis) (a, '$a')],
+                formatSelected: (l) => fmtAnos(l.map((e) => e.$1)),
+                onChanged: (v) => vm.carregar(anos: v),
+              ),
+              AppMultiSelect<int>(
+                semanticLabel: 'Trimestres',
+                icon: LucideIcons.calendar,
+                selected: vm.trimestres,
+                minSelected: 1,
+                options: [for (final t in trisDisp) (t, fmtTrimestre(t))],
+                formatSelected: (l) => fmtTrimestres(l.map((e) => e.$1)),
+                onChanged: (v) => vm.carregar(trimestres: v),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppLayout.gutter),
         GridRow([
           (
             4,
             KpiCard(
               dark: true,
-              label:
-                  'Total de despesas processadas · ${fmtPeriodo(p.periodo.ano, p.periodo.trimestre)}',
+              label: 'Total de despesas processadas · $periodo',
               value: fmtBi(p.totalDespesas),
               delta: variation(p.totalDespesas, p.totalDespesasAnterior),
-              foot: 'vs último trimestre',
+              foot: multi ? 'vs período equivalente anterior' : 'vs último trimestre',
               icon: LucideIcons.wallet,
             ),
           ),
@@ -194,7 +234,7 @@ class _PainelAdmin extends StatelessWidget {
                 p.registrosExtraidos,
                 p.registrosExtraidosAnterior,
               ),
-              foot: 'linhas no último lote',
+              foot: multi ? 'linhas nos ${p.periodosSelecionados.length} lotes' : 'linhas no último lote',
               icon: LucideIcons.database,
             ),
           ),
@@ -361,11 +401,19 @@ class _PainelColaborador extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resumo = context.watch<OperadorasViewModel>().resumo;
-    final periodo = fmtPeriodo(p.periodo.ano, p.periodo.trimestre);
-    final serie = p.serieColaborador.length > 8
+    final periodo = fmtPeriodosSelecionados([for (final x in p.periodosSelecionados) (x.ano, x.trimestre)]);
+    final multi = p.periodosSelecionados.length > 1;
+    final serie = !multi && p.serieColaborador.length > 8
         ? p.serieColaborador.sublist(p.serieColaborador.length - 8)
         : p.serieColaborador;
-    final ufs = {...resumo.ufs, if (vm.uf.isNotEmpty) vm.uf}.toList()..sort();
+    final ufs = {...resumo.ufs, ...vm.ufs}.toList()..sort();
+    final mods = {...resumo.modalidades, ...vm.modalidades}.toList()..sort();
+    final trisDisp = vm.trimestresDosAnos(vm.anos);
+    final rotuloUfs = vm.ufs.isEmpty
+        ? 'Todas UFs'
+        : vm.ufs.length <= 2
+            ? (vm.ufs.toList()..sort()).join(', ')
+            : '${vm.ufs.length} UFs';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,54 +422,62 @@ class _PainelColaborador extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
-                  'Filtros',
-                  style: AppText.sans(14, weight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(width: 4),
-              AppSelect<String>(
-                semanticLabel: 'UF',
-                icon: LucideIcons.mapPin,
-                value: vm.uf,
-                options: [('', 'Todas UFs'), for (final u in ufs) (u, u)],
-                onChanged: (v) => vm.carregar(uf: v),
-              ),
-              const SizedBox(width: 12),
-              AppSelect<int>(
-                semanticLabel: 'Ano',
-                icon: LucideIcons.calendarDays,
-                value: p.periodo.ano,
-                options: [for (final a in vm.anosDisponiveis) (a, '$a')],
-                onChanged: (v) => vm.carregar(ano: v),
-              ),
-              const SizedBox(width: 12),
-              AppSelect<int>(
-                semanticLabel: 'Trimestre',
-                icon: LucideIcons.calendar,
-                value: p.periodo.trimestre,
-                options: [
-                  for (final t in vm.trimestresDoAno(p.periodo.ano))
-                    (t, fmtTrimestre(t)),
-                ],
-                onChanged: (v) => vm.carregar(trimestre: v),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: AppSelect<String>(
-                  semanticLabel: 'Modalidade',
-                  icon: LucideIcons.layers,
-                  value: vm.modalidade,
-                  options: [
-                    ('', 'Todas modalidades'),
-                    for (final m in resumo.modalidades) (m, m),
+              Expanded(
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        'Filtros',
+                        style: AppText.sans(14, weight: FontWeight.w600),
+                      ),
+                    ),
+                    AppMultiSelect<String>(
+                      semanticLabel: 'UFs',
+                      icon: LucideIcons.mapPin,
+                      selected: vm.ufs,
+                      emptyLabel: 'Todas UFs',
+                      options: [for (final u in ufs) (u, u)],
+                      formatSelected: (l) => l.length <= 2 ? l.map((e) => e.$1).join(', ') : '${l.length} UFs',
+                      onChanged: (v) => vm.carregar(ufs: v),
+                    ),
+                    AppMultiSelect<int>(
+                      semanticLabel: 'Anos',
+                      icon: LucideIcons.calendarDays,
+                      selected: vm.anos,
+                      minSelected: 1,
+                      options: [for (final a in vm.anosDisponiveis) (a, '$a')],
+                      formatSelected: (l) => fmtAnos(l.map((e) => e.$1)),
+                      onChanged: (v) => vm.carregar(anos: v),
+                    ),
+                    AppMultiSelect<int>(
+                      semanticLabel: 'Trimestres',
+                      icon: LucideIcons.calendar,
+                      selected: vm.trimestres,
+                      minSelected: 1,
+                      options: [for (final t in trisDisp) (t, fmtTrimestre(t))],
+                      formatSelected: (l) => fmtTrimestres(l.map((e) => e.$1)),
+                      onChanged: (v) => vm.carregar(trimestres: v),
+                    ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      child: AppMultiSelect<String>(
+                        semanticLabel: 'Modalidades',
+                        icon: LucideIcons.layers,
+                        selected: vm.modalidades,
+                        emptyLabel: 'Todas modalidades',
+                        options: [for (final m in mods) (m, m)],
+                        formatSelected: (l) => l.length == 1 ? l.first.$2 : '${l.length} modalidades',
+                        onChanged: (v) => vm.carregar(modalidades: v),
+                      ),
+                    ),
                   ],
-                  onChanged: (v) => vm.carregar(modalidade: v),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
               const Icon(LucideIcons.lock, size: 13, color: AppColors.muted),
               const SizedBox(width: 8),
               Text(
@@ -440,7 +496,7 @@ class _PainelColaborador extends StatelessWidget {
               label: 'Despesas médico-hospitalares · $periodo',
               value: fmtBi(p.despesasMh),
               delta: variation(p.despesasMh, p.despesasMhAnterior),
-              foot: 'vs trimestre anterior',
+              foot: multi ? 'vs período equivalente anterior' : 'vs trimestre anterior',
               icon: LucideIcons.stethoscope,
             ),
           ),
@@ -479,7 +535,7 @@ class _PainelColaborador extends StatelessWidget {
         ]),
         const SizedBox(height: AppLayout.gutter),
         GridRow([
-          (5, _Ranking(p.ranking, uf: vm.uf)),
+          (5, _Ranking(p.ranking, uf: rotuloUfs)),
           (
             7,
             AppCard(
@@ -489,7 +545,7 @@ class _PainelColaborador extends StatelessWidget {
                   CardHeader(
                     'Despesas por trimestre',
                     subtitle: 'Médico-hospitalar · R\$ bilhões',
-                    trailing: Pill('Até o $periodo', tone: PillTone.sage),
+                    trailing: Pill(multi ? periodo : 'Até o $periodo', tone: PillTone.sage),
                   ),
                   const SizedBox(height: 24),
                   PillBarChart(

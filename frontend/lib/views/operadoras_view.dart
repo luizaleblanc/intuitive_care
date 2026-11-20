@@ -140,12 +140,14 @@ class _OperadorasViewState extends State<OperadorasView> {
                     ),
                     const SizedBox(width: 12),
                     Flexible(
-                      child: AppSelect<String>(
-                        semanticLabel: 'Modalidade',
+                      child: AppMultiSelect<String>(
+                        semanticLabel: 'Modalidades',
                         icon: LucideIcons.layers,
-                        value: vm.modalidade,
-                        options: [('', 'Todas modalidades'), for (final m in r.modalidades) (m, m)],
-                        onChanged: (v) => vm.carregar(modalidade: v),
+                        selected: vm.modalidades,
+                        emptyLabel: 'Todas modalidades',
+                        options: [for (final m in r.modalidades) (m, m)],
+                        formatSelected: (l) => l.length == 1 ? l.first.$2 : '${l.length} modalidades',
+                        onChanged: (v) => vm.carregar(modalidades: v),
                       ),
                     ),
                     const SizedBox(width: 12),

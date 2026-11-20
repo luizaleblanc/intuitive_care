@@ -38,20 +38,25 @@ class ExplorarRepository:
         anos: Sequence[int],
         ufs: Sequence[str],
         modalidades: Sequence[str],
-        status: str,
+        status: Any,
         consolidacao: str,
+        trimestres: Sequence[int] = (),
     ) -> List[Dict[str, Any]]:
         condicoes = ["d.ano IN :anos"]
         params: Dict[str, Any] = {"anos": list(anos)}
+        if trimestres:
+            condicoes.append("d.trimestre IN :tris")
+            params["tris"] = list(trimestres)
         if ufs:
             condicoes.append("o.uf IN :ufs")
             params["ufs"] = list(ufs)
         if modalidades:
             condicoes.append("o.modalidade IN :mods")
             params["mods"] = list(modalidades)
-        if status:
-            condicoes.append("o.status = :status")
-            params["status"] = status
+        statuses = [status] if isinstance(status, str) and status else ([s for s in status if s] if status and not isinstance(status, str) else [])
+        if statuses:
+            condicoes.append("o.status IN :statuses")
+            params["statuses"] = list(statuses)
         if consolidacao == "consolidado":
             condicoes.append("COALESCE(l.auditado, 0) = 1")
         elif consolidacao == "pendente":
@@ -68,9 +73,13 @@ class ExplorarRepository:
             f"WHERE {' AND '.join(condicoes)}"
         )
         sql = sql.bindparams(bindparam("anos", expanding=True))
+        if trimestres:
+            sql = sql.bindparams(bindparam("tris", expanding=True))
         if ufs:
             sql = sql.bindparams(bindparam("ufs", expanding=True))
         if modalidades:
             sql = sql.bindparams(bindparam("mods", expanding=True))
+        if statuses:
+            sql = sql.bindparams(bindparam("statuses", expanding=True))
         with get_connection() as conn:
             return [dict(r) for r in conn.execute(sql, params).mappings()]

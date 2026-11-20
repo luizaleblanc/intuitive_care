@@ -6,20 +6,45 @@ class AnaliticoService {
 
   AnaliticoService(this._client);
 
-  Future<Map<String, dynamic>> fetchPainel({int? ano, int? trimestre, String uf = '', String modalidade = ''}) async =>
-      Map<String, dynamic>.from(await _client.get('/painel', query: {
-        'ano': ano?.toString() ?? '',
-        'trimestre': trimestre?.toString() ?? '',
-        'uf': uf,
-        'modalidade': modalidade,
-      }) as Map);
+  Future<Map<String, dynamic>> fetchPainel({
+    int? ano,
+    int? trimestre,
+    String uf = '',
+    String modalidade = '',
+    Iterable<int>? anos,
+    Iterable<int>? trimestres,
+    Iterable<String>? ufs,
+    Iterable<String>? modalidades,
+  }) async {
+    final anosList = anos?.toList() ?? (ano != null ? [ano] : <int>[]);
+    final trisList = trimestres?.toList() ?? (trimestre != null ? [trimestre] : <int>[]);
+    final ufsList = ufs?.where((u) => u.isNotEmpty).toList() ?? (uf.isNotEmpty ? [uf] : <String>[]);
+    final modsList = modalidades?.where((m) => m.isNotEmpty).toList() ?? (modalidade.isNotEmpty ? [modalidade] : <String>[]);
+    return Map<String, dynamic>.from(await _client.get('/painel', query: {
+      'ano': anosList.join(','),
+      'trimestre': trisList.join(','),
+      'uf': ufsList.join(','),
+      'modalidade': modsList.join(','),
+    }) as Map);
+  }
 
-  Future<Map<String, dynamic>> fetchContas({int? ano, int? trimestre, String grupo = ''}) async =>
-      Map<String, dynamic>.from(await _client.get('/contas', query: {
-        'ano': ano?.toString() ?? '',
-        'trimestre': trimestre?.toString() ?? '',
-        'grupo': grupo,
-      }) as Map);
+  Future<Map<String, dynamic>> fetchContas({
+    int? ano,
+    int? trimestre,
+    String grupo = '',
+    Iterable<int>? anos,
+    Iterable<int>? trimestres,
+    Iterable<String>? grupos,
+  }) async {
+    final anosList = anos?.toList() ?? (ano != null ? [ano] : <int>[]);
+    final trisList = trimestres?.toList() ?? (trimestre != null ? [trimestre] : <int>[]);
+    final gruposList = grupos?.where((g) => g.isNotEmpty).toList() ?? (grupo.isNotEmpty ? [grupo] : <String>[]);
+    return Map<String, dynamic>.from(await _client.get('/contas', query: {
+      'ano': anosList.join(','),
+      'trimestre': trisList.join(','),
+      'grupo': gruposList.join(','),
+    }) as Map);
+  }
 
   Future<Map<String, dynamic>> fetchExplorar(Map<String, String> consulta) async =>
       Map<String, dynamic>.from(await _client.get('/explorar', query: consulta) as Map);

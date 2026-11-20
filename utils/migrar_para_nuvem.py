@@ -1,10 +1,11 @@
 """Copia os dados públicos do MySQL local para o banco de homologação (TiDB Cloud).
 
 Uso:
-    python utils/migrar_para_nuvem.py --host HOST --usuario USUARIO --admin-email SEU_EMAIL
+    python utils/migrar_para_nuvem.py --host HOST --usuario USUARIO [--admin-email SEU_EMAIL]
 
 As senhas são pedidas no terminal e não ficam gravadas. Usuários, sessões e tokens
-locais NÃO são copiados: o destino recebe apenas um administrador novo.
+locais NÃO são copiados: omitindo --admin-email os usuários já existentes no destino
+são preservados; informando --admin-email o administrador é criado ou atualizado.
 """
 import argparse
 import getpass
@@ -34,7 +35,7 @@ TABELAS = (
 LOTE = 500
 
 
-def migrar(origem_url, destino_url, admin_email, admin_senha):
+def migrar(origem_url, destino_url, admin_email=None, admin_senha=None):
     initialize_database(destino_url, seed=False, demo=False)
     origem = create_engine(origem_url)
     totais = {}
@@ -59,19 +60,20 @@ def migrar(origem_url, destino_url, admin_email, admin_senha):
                 totais[tabela] = total
                 print(f"{tabela}: {total} registros", flush=True)
 
-            senha_hash = generate_password_hash(admin_senha, method="pbkdf2:sha256")
-            atualizado = destino.execute(
-                text("UPDATE usuarios SET senha_hash = :h, perfil = 'ADMIN', ativo = 1 WHERE LOWER(email) = :e"),
-                {"h": senha_hash, "e": admin_email},
-            )
-            if atualizado.rowcount == 0:
-                destino.execute(
-                    text(
-                        "INSERT INTO usuarios (nome, email, senha_hash, perfil, ativo) "
-                        "VALUES ('Administrador', :e, :h, 'ADMIN', 1)"
-                    ),
+            if admin_email and admin_senha:
+                senha_hash = generate_password_hash(admin_senha, method="pbkdf2:sha256")
+                atualizado = destino.execute(
+                    text("UPDATE usuarios SET senha_hash = :h, perfil = 'ADMIN', ativo = 1 WHERE LOWER(email) = :e"),
                     {"h": senha_hash, "e": admin_email},
                 )
+                if atualizado.rowcount == 0:
+                    destino.execute(
+                        text(
+                            "INSERT INTO usuarios (nome, email, senha_hash, perfil, ativo) "
+                            "VALUES ('Administrador', :e, :h, 'ADMIN', 1)"
+                        ),
+                        {"h": senha_hash, "e": admin_email},
+                    )
     finally:
         origem.dispose()
         reset_engine()
@@ -82,7 +84,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", required=True)
     parser.add_argument("--usuario", required=True)
-    parser.add_argument("--admin-email", required=True)
+    parser.add_argument("--admin-email", default=None, help="Opcional: cria ou atualiza o administrador no destino")
     parser.add_argument("--porta", type=int, default=4000)
     parser.add_argument("--banco", default="intuitive_care")
     args = parser.parse_args()
@@ -95,9 +97,11 @@ def main():
     if Config.DB_HOST == args.host or "tidbcloud.com" in os.getenv("DATABASE_URL", ""):
         parser.error("A origem aponta para o TiDB: restaure no .env os dados do MySQL local.")
 
-    admin_email = validate_email(args.admin_email)
+    admin_email = validate_email(args.admin_email) if args.admin_email else None
     senha_banco = getpass.getpass("Senha do TiDB (não aparece ao digitar): ")
-    admin_senha = validate_password(getpass.getpass("Nova senha do administrador da homologação: "))
+    admin_senha = (
+        validate_password(getpass.getpass("Nova senha do administrador da homologação: ")) if admin_email else None
+    )
 
     base = URL.create(
         "mysql+pymysql", args.usuario, senha_banco, args.host, args.porta, query={"charset": "utf8mb4"}
@@ -110,7 +114,8 @@ def main():
     servidor.dispose()
 
     totais = migrar(Config.get_database_url(), base.set(database=args.banco), admin_email, admin_senha)
-    print(f"Concluído: {sum(totais.values())} registros copiados e administrador configurado.")
+    sufixo = " e administrador configurado." if admin_email else "."
+    print(f"Concluído: {sum(totais.values())} registros copiados{sufixo}")
 
 
 if __name__ == "__main__":

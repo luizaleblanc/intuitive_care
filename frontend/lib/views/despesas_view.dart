@@ -43,12 +43,14 @@ class _DespesasViewState extends State<DespesasView> {
     final c = context.read<ContasViewModel>().contas;
     final formato = context.read<AuthViewModel>().currentUser?.preferencias.formatoExportacao ?? 'CSV';
     if (c == null) return;
-    final atual = fmtPeriodo(c.periodo.ano, c.periodo.trimestre);
+    final atual = fmtPeriodosSelecionados([for (final x in c.periodosSelecionados) (x.ano, x.trimestre)]);
     final anterior = fmtPeriodo(c.periodoAnterior.ano, c.periodoAnterior.trimestre);
     final nome = await Exporter.exportar(
       ExportTable(
         titulo: 'Demonstrações contábeis · $atual',
-        subtitulo: 'Plano de contas ANS · total do setor em R\$ bilhões · comparação com o $anterior',
+        subtitulo: c.periodosSelecionados.length > 1
+            ? 'Plano de contas ANS · total do setor em R\$ bilhões · $atual'
+            : 'Plano de contas ANS · total do setor em R\$ bilhões · comparação com o $anterior',
         colunas: ['Conta', 'Descrição', 'Grupo', atual, anterior, 'Variação'],
         linhas: [
           for (final l in c.contas)
@@ -99,37 +101,58 @@ class _DespesasViewState extends State<DespesasView> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('Competência', style: AppText.sans(14, weight: FontWeight.w600)),
+                Expanded(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text('Competência', style: AppText.sans(14, weight: FontWeight.w600)),
+                      ),
+                      AppMultiSelect<int>(
+                        semanticLabel: 'Anos',
+                        icon: LucideIcons.calendarDays,
+                        selected: vm.anos,
+                        minSelected: 1,
+                        options: [for (final a in vm.anosDisponiveis) (a, '$a')],
+                        formatSelected: (l) => fmtAnos(l.map((e) => e.$1)),
+                        onChanged: (v) => vm.carregar(anos: v),
+                      ),
+                      AppMultiSelect<int>(
+                        semanticLabel: 'Trimestres',
+                        icon: LucideIcons.calendar,
+                        selected: vm.trimestres,
+                        minSelected: 1,
+                        options: [for (final t in vm.trimestresDosAnos(vm.anos)) (t, fmtTrimestre(t))],
+                        formatSelected: (l) => fmtTrimestres(l.map((e) => e.$1)),
+                        onChanged: (v) => vm.carregar(trimestres: v),
+                      ),
+                      AppMultiSelect<String>(
+                        semanticLabel: 'Grupos de contas',
+                        icon: LucideIcons.folderTree,
+                        selected: vm.grupos,
+                        emptyLabel: 'Todos os grupos',
+                        options: [for (final g in c.grupos) (g.$1, '${g.$1} · ${g.$2}')],
+                        formatSelected: (l) => l.length == 1 ? l.first.$2 : '${l.length} grupos',
+                        onChanged: (v) => vm.carregar(grupos: v),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 4),
-                AppSelect<int>(
-                  semanticLabel: 'Ano',
-                  icon: LucideIcons.calendarDays,
-                  value: c.periodo.ano,
-                  options: [for (final a in vm.anosDisponiveis) (a, '$a')],
-                  onChanged: (v) => vm.carregar(ano: v),
-                ),
-                const SizedBox(width: 12),
-                AppSelect<int>(
-                  semanticLabel: 'Trimestre',
-                  icon: LucideIcons.calendar,
-                  value: c.periodo.trimestre,
-                  options: [for (final t in vm.trimestresDoAno(c.periodo.ano)) (t, fmtTrimestre(t))],
-                  onChanged: (v) => vm.carregar(trimestre: v),
-                ),
-                const SizedBox(width: 12),
-                AppSelect<String>(
-                  semanticLabel: 'Grupo de contas',
-                  icon: LucideIcons.folderTree,
-                  value: vm.grupo,
-                  options: [('', 'Todos os grupos'), for (final g in c.grupos) (g.$1, '${g.$1} · ${g.$2}')],
-                  onChanged: (v) => vm.carregar(grupo: v),
-                ),
-                const Spacer(),
                 if (isAdmin) ...[
-                  if (c.lote.auditado)
+                  const SizedBox(width: 12),
+                  if (!vm.podeAuditar)
+                    Tooltip(
+                      message: 'Selecione apenas 1 ano e 1 trimestre para auditar o lote individual.',
+                      child: Pill(
+                        c.lote.auditado ? 'Lotes auditados' : '${c.periodosSelecionados.length} lotes selecionados',
+                        tone: c.lote.auditado ? PillTone.ok : PillTone.sage,
+                        icon: LucideIcons.shieldCheck,
+                      ),
+                    )
+                  else if (c.lote.auditado)
                     Tooltip(
                       message: c.lote.auditadoPor == null
                           ? 'Lote auditado'
@@ -220,8 +243,11 @@ class _TabelaContas extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: CardHeader(
               'Demonstrações contábeis · plano de contas ANS',
-              subtitle: 'Total do setor em R\$ bilhões · ${fmtPeriodo(c.periodo.ano, c.periodo.trimestre)} '
-                  'vs ${fmtTrimestre(c.periodoAnterior.trimestre)} de ${c.periodoAnterior.ano}',
+              subtitle: c.periodosSelecionados.length > 1
+                  ? 'Total do setor em R\$ bilhões · '
+                      '${fmtPeriodosSelecionados([for (final x in c.periodosSelecionados) (x.ano, x.trimestre)])}'
+                  : 'Total do setor em R\$ bilhões · ${fmtPeriodo(c.periodo.ano, c.periodo.trimestre)} '
+                      'vs ${fmtTrimestre(c.periodoAnterior.trimestre)} de ${c.periodoAnterior.ano}',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

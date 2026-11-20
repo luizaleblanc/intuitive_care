@@ -143,6 +143,7 @@ class ExplorarModel {
 
   /// Anos efetivamente consultados (podem não ser contíguos, ex.: 2019, 2021).
   final List<int> anos;
+  final List<int> trimestres;
   final String granularidade;
   final List<int> anosDisponiveis;
   final List<int> anosParciais;
@@ -164,6 +165,7 @@ class ExplorarModel {
     required this.anoInicio,
     required this.anoFim,
     this.anos = const [],
+    this.trimestres = const [],
     required this.granularidade,
     required this.anosDisponiveis,
     required this.anosParciais,
@@ -190,6 +192,7 @@ class ExplorarModel {
       anoInicio: (periodo['ano_inicio'] as num).toInt(),
       anoFim: (periodo['ano_fim'] as num).toInt(),
       anos: [for (final a in (periodo['anos'] as List? ?? [])) (a as num).toInt()],
+      trimestres: [for (final t in (periodo['trimestres'] as List? ?? [])) (t as num).toInt()],
       granularidade: (periodo['granularidade'] ?? 'trimestre').toString(),
       anosDisponiveis: [for (final a in (j['anos_disponiveis'] as List? ?? [])) (a as num).toInt()],
       anosParciais: [for (final a in (j['anos_parciais'] as List? ?? [])) (a as num).toInt()],

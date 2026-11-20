@@ -59,12 +59,21 @@ void main() {
     expect(consultas.last['comparar'], '1');
     expect(vm.dados!.kpisAnteriores!.despesas, 1e9);
 
-    await vm.aplicar(vm.filtros.copyWith(modalidades: {'Medicina de Grupo', 'Autogestão'}, ufs: {'SP'}, portes: {'grande', 'medio'}));
+    await vm.aplicar(vm.filtros.copyWith(
+      modalidades: {'Medicina de Grupo', 'Autogestão'},
+      ufs: {'SP'},
+      portes: {'grande', 'medio'},
+      trimestres: {1, 2},
+      statuses: {'Ativa', 'Inativa'},
+    ));
     expect(consultas.last['modalidade'], 'Autogestão,Medicina de Grupo');
     expect(consultas.last['uf'], 'SP');
     expect(consultas.last['porte'], 'grande,medio');
-    expect(vm.filtros.avancadosAtivos, 3);
+    expect(consultas.last['trimestres'], '1,2');
+    expect(consultas.last['status'], 'Ativa,Inativa');
+    expect(vm.filtros.avancadosAtivos, 4);
     expect(vm.filtros.semAvancados().avancadosAtivos, 0);
+    expect(vm.filtros.semAvancados().trimestres, {1, 2});
   });
 
   test('anos específicos não contíguos vão no parâmetro anos', () async {

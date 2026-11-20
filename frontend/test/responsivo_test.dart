@@ -102,4 +102,37 @@ void main() {
     expect(find.byType(RegisterView), findsNothing);
     expect(find.text('Entrar'), findsWidgets);
   });
+
+  testWidgets('AppMultiSelect permite marcar mais de uma opção e aplicar', (tester) async {
+    Set<int> selecionado = {2025};
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (_, setState) => Center(
+              child: AppMultiSelect<int>(
+                semanticLabel: 'Anos',
+                selected: selecionado,
+                minSelected: 1,
+                options: const [(2026, '2026'), (2025, '2025'), (2024, '2024')],
+                onChanged: (v) => setState(() => selecionado = v),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+
+    await tester.tap(find.text('2025'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2024'));
+    await tester.pump();
+    await tester.tap(find.text('Aplicar'));
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+
+    expect(selecionado, {2025, 2024});
+  });
 }

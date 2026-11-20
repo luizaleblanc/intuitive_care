@@ -75,8 +75,18 @@ class ExplorarService:
             selecionados = list(range(ano_inicio, ano_fim + 1))
         ano_inicio, ano_fim = selecionados[0], selecionados[-1]
 
+        trimestres_raw = _lista(args.get("trimestres") or args.get("trimestre"))
+        trimestres_sel: List[int] = []
+        if trimestres_raw:
+            try:
+                trimestres_sel = sorted({int(t) for t in trimestres_raw})
+            except ValueError:
+                raise BusinessRuleError("Parâmetro 'trimestres' deve conter valores entre 1 e 4.", 400)
+            if any(t not in (1, 2, 3, 4) for t in trimestres_sel):
+                raise BusinessRuleError("Trimestre inválido. Use valores entre 1 e 4.", 400)
+
         granularidade = args.get("granularidade") or "trimestre"
-        status = args.get("status") or ""
+        statuses = _lista(args.get("status"))
         portes = _lista(args.get("porte"))
         faixas = _lista(args.get("faixa_despesa"))
         consolidacoes = _lista(args.get("consolidacao"))
@@ -84,7 +94,7 @@ class ExplorarService:
         modalidades = _lista(args.get("modalidade"))
         for valores, validos, nome in (
             ([granularidade], GRANULARIDADES, "granularidade"),
-            ([status], STATUS, "status"),
+            (statuses, STATUS[1:], "status"),
             (portes, PORTES, "porte"),
             (faixas, FAIXAS_DESPESA, "faixa_despesa"),
             (consolidacoes, CONSOLIDACOES[1:], "consolidacao"),
@@ -96,11 +106,11 @@ class ExplorarService:
         if any(u not in VALID_UFS for u in ufs):
             raise BusinessRuleError("UF inválida no filtro.", 400)
         if not ver_inativas:
-            status = "Ativa"  # Regra de perfil: só quem tem operadoras.ver_inativas vê inativas.
+            statuses = ["Ativa"]  # Regra de perfil: só quem tem operadoras.ver_inativas vê inativas.
 
         comparar = str(args.get("comparar", "")).lower() in ("1", "true", "sim")
-        filtros = dict(ufs=ufs, modalidades=modalidades, status=status, consolidacao=consolidacao,
-                       portes=portes, faixas=faixas)
+        filtros = dict(ufs=ufs, modalidades=modalidades, status=statuses, consolidacao=consolidacao,
+                       portes=portes, faixas=faixas, trimestres=trimestres_sel)
         atual = ExplorarService._calcular(selecionados, granularidade, filtros)
 
         anterior = None
@@ -119,7 +129,7 @@ class ExplorarService:
         trimestres = ExplorarRepository.trimestres_por_ano()
         return {
             "periodo": {"ano_inicio": ano_inicio, "ano_fim": ano_fim, "anos": selecionados,
-                        "granularidade": granularidade},
+                        "trimestres": trimestres_sel, "granularidade": granularidade},
             "anos_disponiveis": anos,
             "anos_parciais": [a for a in anos if trimestres.get(a, 0) < 4],
             "facetas": {
@@ -135,7 +145,9 @@ class ExplorarService:
 
     @staticmethod
     def _calcular(anos: List[int], granularidade: str, f: Dict[str, Any]) -> Dict[str, Any]:
-        linhas = ExplorarRepository.linhas(anos, f["ufs"], f["modalidades"], f["status"], f["consolidacao"])
+        linhas = ExplorarRepository.linhas(
+            anos, f["ufs"], f["modalidades"], f["status"], f["consolidacao"], f.get("trimestres", ())
+        )
 
         if f["portes"]:
             limites = [PORTES[p] for p in f["portes"]]

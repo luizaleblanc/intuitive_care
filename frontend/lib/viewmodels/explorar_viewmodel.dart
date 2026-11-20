@@ -15,6 +15,9 @@ class FiltrosExplorar {
 
   /// Anos escolhidos um a um no modo "Anos específicos".
   final Set<int> anos;
+
+  /// Trimestres selecionados (vazio = todos os trimestres disponíveis).
+  final Set<int> trimestres;
   final bool comparar;
   final String granularidade;
   final Set<String> ufs;
@@ -22,7 +25,7 @@ class FiltrosExplorar {
   final Set<String> portes;
   final Set<String> faixas;
   final Set<String> consolidacoes;
-  final String status;
+  final Set<String> statuses;
 
   const FiltrosExplorar({
     this.modo = ModoPeriodo.ano,
@@ -30,6 +33,7 @@ class FiltrosExplorar {
     this.anoFim,
     this.ultimos = 3,
     this.anos = const {},
+    this.trimestres = const {},
     this.comparar = false,
     this.granularidade = 'trimestre',
     this.ufs = const {},
@@ -37,7 +41,7 @@ class FiltrosExplorar {
     this.portes = const {},
     this.faixas = const {},
     this.consolidacoes = const {},
-    this.status = '',
+    this.statuses = const {},
   });
 
   FiltrosExplorar copyWith({
@@ -46,6 +50,7 @@ class FiltrosExplorar {
     int? Function()? anoFim,
     int? ultimos,
     Set<int>? anos,
+    Set<int>? trimestres,
     bool? comparar,
     String? granularidade,
     Set<String>? ufs,
@@ -53,7 +58,7 @@ class FiltrosExplorar {
     Set<String>? portes,
     Set<String>? faixas,
     Set<String>? consolidacoes,
-    String? status,
+    Set<String>? statuses,
   }) =>
       FiltrosExplorar(
         modo: modo ?? this.modo,
@@ -61,6 +66,7 @@ class FiltrosExplorar {
         anoFim: anoFim != null ? anoFim() : this.anoFim,
         ultimos: ultimos ?? this.ultimos,
         anos: anos ?? this.anos,
+        trimestres: trimestres ?? this.trimestres,
         comparar: comparar ?? this.comparar,
         granularidade: granularidade ?? this.granularidade,
         ufs: ufs ?? this.ufs,
@@ -68,7 +74,7 @@ class FiltrosExplorar {
         portes: portes ?? this.portes,
         faixas: faixas ?? this.faixas,
         consolidacoes: consolidacoes ?? this.consolidacoes,
-        status: status ?? this.status,
+        statuses: statuses ?? this.statuses,
       );
 
   /// Quantidade de filtros avançados ativos (exibida no botão "Filtros").
@@ -78,7 +84,7 @@ class FiltrosExplorar {
       (portes.isNotEmpty ? 1 : 0) +
       (faixas.isNotEmpty ? 1 : 0) +
       (consolidacoes.isNotEmpty ? 1 : 0) +
-      (status.isNotEmpty ? 1 : 0);
+      (statuses.isNotEmpty ? 1 : 0);
 
   FiltrosExplorar semAvancados() => FiltrosExplorar(
       modo: modo,
@@ -86,6 +92,7 @@ class FiltrosExplorar {
       anoFim: anoFim,
       ultimos: ultimos,
       anos: anos,
+      trimestres: trimestres,
       comparar: comparar,
       granularidade: granularidade);
 }
@@ -156,6 +163,7 @@ class ExplorarViewModel extends ChangeNotifier {
       'anos': especificos ? anosSelecionados.join(',') : '',
       'ano_inicio': especificos ? '' : ini?.toString() ?? '',
       'ano_fim': especificos ? '' : fim?.toString() ?? '',
+      'trimestres': (_filtros.trimestres.toList()..sort()).join(','),
       'granularidade': _filtros.granularidade,
       'comparar': _filtros.comparar ? '1' : '',
       'uf': (_filtros.ufs.toList()..sort()).join(','),
@@ -163,7 +171,7 @@ class ExplorarViewModel extends ChangeNotifier {
       'porte': (_filtros.portes.toList()..sort()).join(','),
       'faixa_despesa': (_filtros.faixas.toList()..sort()).join(','),
       'consolidacao': (_filtros.consolidacoes.toList()..sort()).join(','),
-      'status': _filtros.status,
+      'status': (_filtros.statuses.toList()..sort()).join(','),
     };
   }
 

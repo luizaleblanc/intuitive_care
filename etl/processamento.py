@@ -43,24 +43,51 @@ class DataProcessor:
         self.output_file = os.path.join(self.output_dir, "consolidado_despesas.csv")
 
     def identificar_arquivos(self):
+        def chave(caminho):
+            m = PADRAO_ARQUIVO.match(os.path.basename(caminho))
+            return (int(m.group(2)), int(m.group(1)))
+
         return sorted(
-            f for f in glob.glob(os.path.join(self.input_folder, "*.csv"))
-            if PADRAO_ARQUIVO.match(os.path.basename(f))
+            (
+                f for f in glob.glob(os.path.join(self.input_folder, "*.csv"))
+                if PADRAO_ARQUIVO.match(os.path.basename(f))
+            ),
+            key=chave,
         )
 
-    def _processar_arquivo(self, arquivo):
+    def _processar_arquivo(self, arquivo, saldo_anterior):
         trimestre, ano = (int(x) for x in PADRAO_ARQUIVO.match(os.path.basename(arquivo)).groups())
         df = ler_csv_ans(arquivo, sep=";", dtype=str)
         df.columns = df.columns.str.strip().str.upper()
         df["REG_ANS"] = df["REG_ANS"].str.strip()
         df["CONTA"] = df["CD_CONTA_CONTABIL"].str.strip()
-        df["VALOR"] = para_numero(df["VL_SALDO_FINAL"]) - para_numero(df["VL_SALDO_INICIAL"])
+        df["SALDO_FINAL"] = para_numero(df["VL_SALDO_FINAL"])
 
         lote = {"ano": ano, "trimestre": trimestre, "registros_extraidos": len(df),
                 "operadoras": df["REG_ANS"].nunique()}
 
+        # Mantém apenas contas dos grupos analisados (31/41/43/46) para o cálculo do trimestre.
+        relevantes = df[df["CONTA"].str[:2].isin(GRUPOS_SETOR)].copy()
+        if "VL_SALDO_INICIAL" in relevantes.columns:
+            relevantes["VALOR"] = relevantes["SALDO_FINAL"] - para_numero(relevantes["VL_SALDO_INICIAL"])
+        else:
+            # Arquivos anteriores a 4T2021 só trazem VL_SALDO_FINAL acumulado no ano:
+            # o valor do trimestre é a diferença em relação ao saldo final do trimestre anterior do mesmo ano.
+            agregado = relevantes.groupby(["REG_ANS", "CONTA"], as_index=False).agg(
+                SALDO_FINAL=("SALDO_FINAL", "sum"),
+                DESCRICAO=("DESCRICAO", "first"),
+            )
+            if trimestre == 1:
+                agregado["VALOR"] = agregado["SALDO_FINAL"]
+            else:
+                anteriores = [saldo_anterior.get((r, c), 0.0) for r, c in zip(agregado["REG_ANS"], agregado["CONTA"])]
+                agregado["VALOR"] = agregado["SALDO_FINAL"] - pd.Series(anteriores, index=agregado.index)
+            for r, c, sf in zip(agregado["REG_ANS"], agregado["CONTA"], agregado["SALDO_FINAL"]):
+                saldo_anterior[(r, c)] = float(sf)
+            relevantes = agregado
+
         # Por operadora: uma coluna por conta de interesse.
-        alvo = df[df["CONTA"].isin({"311", "41", "43", "46"} | CONTAS_MEDICO_HOSPITALAR)].copy()
+        alvo = relevantes[relevantes["CONTA"].isin({"311", "41", "43", "46"} | CONTAS_MEDICO_HOSPITALAR)].copy()
         alvo["CAMPO"] = alvo["CONTA"].map(
             {"311": "contraprestacoes", "41": "eventos", "43": "comercializacao", "46": "administrativas"}
         ).fillna("eventos_mh")
@@ -72,7 +99,7 @@ class DataProcessor:
         demo["ano"], demo["trimestre"] = ano, trimestre
 
         # Setor: soma por conta (até 5 dígitos) nos grupos analisados.
-        setor_df = df[df["CONTA"].str.len().le(5) & df["CONTA"].str[:2].isin(GRUPOS_SETOR)]
+        setor_df = relevantes[relevantes["CONTA"].str.len().le(5)]
         descricoes = (
             setor_df.groupby("CONTA")["DESCRICAO"]
             .agg(lambda s: s.dropna().str.strip().value_counts().index[0] if s.notna().any() else "")
@@ -93,9 +120,15 @@ class DataProcessor:
             return
 
         demos, setores, lotes = [], [], []
+        ano_atual = None
+        saldo_anterior = {}
         for arquivo in arquivos:
+            ano = int(PADRAO_ARQUIVO.match(os.path.basename(arquivo)).group(2))
+            if ano != ano_atual:
+                ano_atual = ano
+                saldo_anterior = {}
             print(f"Lendo: {os.path.basename(arquivo)}")
-            demo, setor, lote = self._processar_arquivo(arquivo)
+            demo, setor, lote = self._processar_arquivo(arquivo, saldo_anterior)
             demos.append(demo)
             setores.append(setor)
             lotes.append(lote)

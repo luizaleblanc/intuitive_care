@@ -46,6 +46,7 @@ class RankingItem {
 class PainelModel {
   final Periodo periodo;
   final List<Periodo> periodos;
+  final List<Periodo> periodosSelecionados;
 
   // Administrador
   final double totalDespesas;
@@ -72,6 +73,7 @@ class PainelModel {
   const PainelModel({
     required this.periodo,
     required this.periodos,
+    this.periodosSelecionados = const [],
     required this.totalDespesas,
     this.totalDespesasAnterior,
     required this.registrosExtraidos,
@@ -95,9 +97,12 @@ class PainelModel {
   factory PainelModel.fromJson(Map<String, dynamic> j) {
     final a = Map<String, dynamic>.from(j['admin'] as Map);
     final c = Map<String, dynamic>.from(j['colaborador'] as Map);
+    final periodo = Periodo.fromJson(Map<String, dynamic>.from(j['periodo'] as Map));
+    final selecionados = _list(j['periodos_selecionados']).map(Periodo.fromJson).toList();
     return PainelModel(
-      periodo: Periodo.fromJson(Map<String, dynamic>.from(j['periodo'] as Map)),
+      periodo: periodo,
       periodos: _list(j['periodos']).map(Periodo.fromJson).toList(),
+      periodosSelecionados: selecionados.isEmpty ? [periodo] : selecionados,
       totalDespesas: _d(a['total_despesas']) ?? 0,
       totalDespesasAnterior: _d(a['total_despesas_anterior']),
       registrosExtraidos: _i(a['registros_extraidos']),
@@ -174,6 +179,7 @@ class ContasModel {
   final Periodo periodo;
   final Periodo periodoAnterior;
   final List<Periodo> periodos;
+  final List<Periodo> periodosSelecionados;
   final List<(String, String)> grupos;
   final Map<String, (double, double?)> kpis;
   final List<ContaLinha> contas;
@@ -185,6 +191,7 @@ class ContasModel {
     required this.periodo,
     required this.periodoAnterior,
     required this.periodos,
+    this.periodosSelecionados = const [],
     required this.grupos,
     required this.kpis,
     required this.contas,
@@ -200,10 +207,13 @@ class ContasModel {
       kpis[k.toString()] = (_d(m['valor_atual']) ?? 0, _d(m['valor_anterior']));
     });
     final l = Map<String, dynamic>.from(j['lote'] as Map);
+    final periodo = Periodo.fromJson(Map<String, dynamic>.from(j['periodo'] as Map));
+    final selecionados = _list(j['periodos_selecionados']).map(Periodo.fromJson).toList();
     return ContasModel(
-      periodo: Periodo.fromJson(Map<String, dynamic>.from(j['periodo'] as Map)),
+      periodo: periodo,
       periodoAnterior: Periodo.fromJson(Map<String, dynamic>.from(j['periodo_anterior'] as Map)),
       periodos: _list(j['periodos']).map(Periodo.fromJson).toList(),
+      periodosSelecionados: selecionados.isEmpty ? [periodo] : selecionados,
       grupos: _list(j['grupos']).map((g) => (g['codigo'].toString(), g['nome'].toString())).toList(),
       kpis: kpis,
       contas: _list(j['contas'])

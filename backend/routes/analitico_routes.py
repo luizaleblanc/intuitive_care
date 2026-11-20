@@ -8,12 +8,13 @@ from backend.services.validators import BusinessRuleError
 analitico_bp = Blueprint("analitico", __name__, url_prefix="/api")
 
 
-def _int_arg(nome: str):
-    valor = request.args.get(nome)
-    if not valor:
-        return None
+def _int_list_arg(nome: str, alias: str = ""):
+    bruto = request.args.get(nome) or (request.args.get(alias) if alias else None)
+    if not bruto:
+        return []
+    itens = [v.strip() for v in bruto.split(",") if v.strip()]
     try:
-        return int(valor)
+        return [int(v) for v in itens]
     except ValueError:
         raise BusinessRuleError(f"Parâmetro '{nome}' deve ser numérico.", 400)
 
@@ -24,8 +25,8 @@ def painel():
     return (
         jsonify(
             AnaliticoService.painel(
-                ano=_int_arg("ano"),
-                trimestre=_int_arg("trimestre"),
+                anos=_int_list_arg("anos", "ano"),
+                trimestres=_int_list_arg("trimestres", "trimestre"),
                 uf=request.args.get("uf", "").strip().upper(),
                 modalidade=request.args.get("modalidade", "").strip(),
             )
@@ -40,9 +41,9 @@ def contas():
     return (
         jsonify(
             AnaliticoService.contas(
-                ano=_int_arg("ano"),
-                trimestre=_int_arg("trimestre"),
-                grupo=request.args.get("grupo", "").strip(),
+                anos=_int_list_arg("anos", "ano"),
+                trimestres=_int_list_arg("trimestres", "trimestre"),
+                grupo=(request.args.get("grupos") or request.args.get("grupo") or "").strip(),
             )
         ),
         200,

@@ -144,7 +144,11 @@ String _rotuloAnos(List<int> anos, int ini, int fim) {
   return contiguo ? '$ini–$fim' : anos.join(', ');
 }
 
-String _rotuloPeriodo(ExplorarModel d) => _rotuloAnos(d.anos, d.anoInicio, d.anoFim);
+String _rotuloPeriodo(ExplorarModel d) {
+  final base = _rotuloAnos(d.anos, d.anoInicio, d.anoFim);
+  if (d.trimestres.isEmpty || d.trimestres.length == 4) return base;
+  return '$base · ${fmtTrimestres(d.trimestres)}';
+}
 
 String _rotuloPonto(ExplorarModel d, PontoSerie p) => p.trimestre == null
     ? '${p.ano}${d.anosParciais.contains(p.ano) ? '*' : ''}'
@@ -246,6 +250,15 @@ class _BarraControles extends StatelessWidget {
               semanticLabel: 'Quantidade de anos',
               onChanged: (n) => vm.aplicar(f.copyWith(ultimos: n)),
             ),
+          AppMultiSelect<int>(
+            semanticLabel: 'Trimestres',
+            icon: LucideIcons.calendarDays,
+            selected: f.trimestres,
+            emptyLabel: 'Todos os trimestres',
+            options: [for (var t = 1; t <= 4; t++) (t, fmtTrimestre(t))],
+            formatSelected: (l) => fmtTrimestres(l.map((e) => e.$1)),
+            onChanged: (tris) => vm.aplicar(f.copyWith(trimestres: tris)),
+          ),
         ]),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 14),
@@ -355,7 +368,7 @@ class _FiltrosAtivos extends StatelessWidget {
       for (final x in f.faixas) ('Despesa: ${rotulosFaixa[x]!}', f.copyWith(faixas: {...f.faixas}..remove(x))),
       for (final c in f.consolidacoes)
         (rotulosConsolidacao[c]!, f.copyWith(consolidacoes: {...f.consolidacoes}..remove(c))),
-      if (f.status.isNotEmpty) ('Status: ${f.status}', f.copyWith(status: '')),
+      for (final s in f.statuses) ('Status: $s', f.copyWith(statuses: {...f.statuses}..remove(s))),
     ];
     if (pilulas.isEmpty) return const SizedBox.shrink();
     return Wrap(
@@ -811,10 +824,10 @@ class _PainelFiltrosState extends State<_PainelFiltros> {
                   (v) => _f = _f.copyWith(consolidacoes: _alternar(_f.consolidacoes, v)),
                 )),
                 if (fac.status.length > 1)
-                  _secao('Status da operadora', 'Visível apenas para Administrador.', _chips(
+                  _secao('Status da operadora', 'Visível apenas para Administrador. Selecione um ou mais.', _chips(
                     [for (final s in fac.status) (s, s)],
-                    (v) => _f.status == v,
-                    (v) => _f = _f.copyWith(status: _f.status == v ? '' : v),
+                    _f.statuses.contains,
+                    (v) => _f = _f.copyWith(statuses: _alternar(_f.statuses, v)),
                   )),
               ],
             ),

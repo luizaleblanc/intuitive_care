@@ -28,8 +28,9 @@ class OperadoraService:
         page = max(1, page)
         limit = min(max(1, limit), 100)
         # Regra do MVP: operadoras inativas só aparecem para o Administrador.
-        if not is_admin and status == "Inativa":
-            status = "__nenhum__"
+        if not is_admin and status:
+            filtrados = [s.strip() for s in status.split(",") if s.strip() and s.strip() != "Inativa"]
+            status = ",".join(filtrados) if filtrados else "__nenhum__"
         rows, total = OperadoraRepository.list_paginated(
             page=page,
             limit=limit,

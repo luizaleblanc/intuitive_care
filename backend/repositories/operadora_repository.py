@@ -1,7 +1,7 @@
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from backend.database.connection import get_connection
 
@@ -26,9 +26,10 @@ class OperadoraRepository:
         modalidade: str = "",
         status: str = "",
         incluir_inativas: bool = True,
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[str, Dict[str, Any], List[str]]:
         where = ["1=1"]
         params: Dict[str, Any] = {}
+        expanding: List[str] = []
 
         if search:
             termo = search.strip()
@@ -46,19 +47,32 @@ class OperadoraRepository:
                 params["digitos"] = f"%{digitos}%"
             where.append("(" + " OR ".join(condicoes) + ")")
 
-        if uf:
-            where.append("UPPER(o.uf) = UPPER(:uf)")
-            params["uf"] = uf
-        if modalidade:
-            where.append("o.modalidade = :modalidade")
-            params["modalidade"] = modalidade
-        if status:
-            where.append("o.status = :status")
-            params["status"] = status
+        ufs = [u.strip().upper() for u in uf.split(",") if u.strip()]
+        if ufs:
+            where.append("UPPER(o.uf) IN :ufs")
+            params["ufs"] = ufs
+            expanding.append("ufs")
+        modalidades = [m.strip() for m in modalidade.split(",") if m.strip()]
+        if modalidades:
+            where.append("o.modalidade IN :modalidades")
+            params["modalidades"] = modalidades
+            expanding.append("modalidades")
+        statuses = [s.strip() for s in status.split(",") if s.strip()]
+        if statuses:
+            where.append("o.status IN :statuses")
+            params["statuses"] = statuses
+            expanding.append("statuses")
         if not incluir_inativas:
             where.append("o.status <> 'Inativa'")
 
-        return " AND ".join(where), params
+        return " AND ".join(where), params, expanding
+
+    @staticmethod
+    def _stmt(sql_str: str, expanding: List[str]):
+        stmt = text(sql_str)
+        for key in expanding:
+            stmt = stmt.bindparams(bindparam(key, expanding=True))
+        return stmt
 
     @staticmethod
     def list_paginated(
@@ -70,20 +84,24 @@ class OperadoraRepository:
         status: str = "",
         incluir_inativas: bool = True,
     ) -> Tuple[List[Dict[str, Any]], int]:
-        where_sql, params = OperadoraRepository._filtros(search, uf, modalidade, status, incluir_inativas)
+        where_sql, params, expanding = OperadoraRepository._filtros(search, uf, modalidade, status, incluir_inativas)
         params.update({"limit": limit, "offset": (page - 1) * limit})
 
         with get_connection() as conn:
-            total = conn.execute(text(f"SELECT COUNT(*) FROM operadoras o WHERE {where_sql}"), params).scalar_one()
+            total = conn.execute(
+                OperadoraRepository._stmt(f"SELECT COUNT(*) FROM operadoras o WHERE {where_sql}", expanding),
+                params,
+            ).scalar_one()
             rows = (
                 conn.execute(
-                    text(
+                    OperadoraRepository._stmt(
                         f"SELECT o.*, dt.despesa_trimestre "
                         f"FROM operadoras o {_SUBQUERY_ULTIMO_TRIMESTRE}"
                         f"WHERE {where_sql} "
                         f"ORDER BY CASE o.status WHEN 'Inativa' THEN 1 ELSE 0 END, "
                         f"o.beneficiarios DESC, o.razao_social ASC "
-                        f"LIMIT :limit OFFSET :offset"
+                        f"LIMIT :limit OFFSET :offset",
+                        expanding,
                     ),
                     params,
                 )
@@ -95,13 +113,14 @@ class OperadoraRepository:
     @staticmethod
     def list_all(**filtros) -> List[Dict[str, Any]]:
         """Lista sem paginação (exportação CSV)."""
-        where_sql, params = OperadoraRepository._filtros(**filtros)
+        where_sql, params, expanding = OperadoraRepository._filtros(**filtros)
         with get_connection() as conn:
             rows = (
                 conn.execute(
-                    text(
+                    OperadoraRepository._stmt(
                         f"SELECT o.*, dt.despesa_trimestre FROM operadoras o {_SUBQUERY_ULTIMO_TRIMESTRE}"
-                        f"WHERE {where_sql} ORDER BY o.beneficiarios DESC, o.razao_social ASC"
+                        f"WHERE {where_sql} ORDER BY o.beneficiarios DESC, o.razao_social ASC",
+                        expanding,
                     ),
                     params,
                 )

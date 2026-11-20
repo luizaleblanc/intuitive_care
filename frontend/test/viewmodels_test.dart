@@ -153,6 +153,17 @@ void main() {
 
     await vm.carregar(uf: 'SP');
     expect(consultas.last['uf'], 'SP');
+
+    await vm.carregar(
+      anos: {2025, 2026},
+      trimestres: {1, 2},
+      ufs: {'SP', 'RJ'},
+      modalidades: {'Medicina de Grupo', 'Autogestão'},
+    );
+    expect(consultas.last['ano'], '2025,2026');
+    expect(consultas.last['trimestre'], '1,2');
+    expect(consultas.last['uf'], 'RJ,SP');
+    expect(consultas.last['modalidade'], 'Autogestão,Medicina de Grupo');
   });
 
   test('OperadorasViewModel carrega lista + resumo e envia busca', () async {
@@ -182,6 +193,9 @@ void main() {
     expect(vm.items.single.registroAns, '326305');
     expect(vm.resumo.ativas, 1101);
     expect(vm.resumo.modalidades, ['Medicina de Grupo']);
+
+    await vm.carregar(modalidades: {'Medicina de Grupo', 'Autogestão'});
+    expect(vm.modalidade, 'Autogestão,Medicina de Grupo');
   });
 
   test('ContasViewModel expõe erro 403 ao auditar lote sem permissão', () async {
@@ -210,5 +224,8 @@ void main() {
     expect(vm.contas, isNotNull);
     expect(await vm.auditarLote(), isNull);
     expect(vm.error, contains('Administrador'));
+
+    await vm.carregar(anos: {2025, 2026}, trimestres: {1, 2}, grupos: {'41', '46'});
+    expect(vm.grupo, '41,46');
   });
 }

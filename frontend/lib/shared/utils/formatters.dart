@@ -40,6 +40,37 @@ String fmtPeriodoCurto(int ano, int trimestre) => '$trimestreº trimestre\n$ano'
 
 String fmtTrimestre(int t) => '$tº trimestre';
 
+/// Rótulo resumido para lista de trimestres (sem abreviações):
+/// [1] -> "1º trimestre", [1, 2] -> "1º e 2º trimestres", [1, 2, 3] -> "3 trimestres".
+String fmtTrimestres(Iterable<int> trimestres, {String vazio = 'Todos os trimestres'}) {
+  final lista = trimestres.toSet().toList()..sort();
+  if (lista.isEmpty) return vazio;
+  if (lista.length == 1) return fmtTrimestre(lista.first);
+  if (lista.length == 2) return '${lista[0]}º e ${lista[1]}º trimestres';
+  if (lista.length == 4) return 'Todos os trimestres';
+  return '${lista.length} trimestres';
+}
+
+/// Rótulo resumido para lista de anos: [2025] -> "2025", [2024, 2025] -> "2024, 2025", 3+ -> "3 anos".
+String fmtAnos(Iterable<int> anos, {String vazio = 'Todos os anos'}) {
+  final lista = anos.toSet().toList()..sort((a, b) => b.compareTo(a));
+  if (lista.isEmpty) return vazio;
+  if (lista.length <= 2) return lista.join(', ');
+  return '${lista.length} anos';
+}
+
+/// Rótulo descritivo para um ou mais períodos (ano, trimestre) selecionados.
+String fmtPeriodosSelecionados(List<(int, int)> periodos) {
+  if (periodos.isEmpty) return '';
+  if (periodos.length == 1) return fmtPeriodo(periodos.first.$1, periodos.first.$2);
+  final anos = periodos.map((p) => p.$1).toSet().toList()..sort();
+  final tris = periodos.map((p) => p.$2).toSet().toList()..sort();
+  if (anos.length == 1) return '${fmtTrimestres(tris)} de ${anos.first}';
+  final rotuloAnos = anos.length <= 3 ? anos.join(', ') : '${anos.first}–${anos.last}';
+  if (tris.length < 4) return '${fmtTrimestres(tris)} · $rotuloAnos';
+  return '${periodos.length} trimestres · $rotuloAnos';
+}
+
 /// Máscara de CNPJ: 29309127000179 -> 29.309.127/0001-79.
 String fmtCnpj(String? cnpj) {
   final d = (cnpj ?? '').replaceAll(RegExp(r'\D'), '');
