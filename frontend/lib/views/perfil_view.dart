@@ -102,6 +102,14 @@ class _PerfilViewState extends State<PerfilView> {
   Future<void> _salvar() async {
     final vm = context.read<AuthViewModel>();
     final toast = context.read<ToastController>();
+    final u = vm.currentUser;
+    final prefsJson = Map<String, dynamic>.from(_prefs.toJson());
+    if (u != null && !u.isAdmin) {
+      prefsJson
+        ..remove('formato_exportacao')
+        ..remove('resumo_semanal')
+        ..remove('alerta_novos_dados');
+    }
     setState(() => _erro = null);
     final ok = await vm.updateProfile({
       'nome': _nome.text,
@@ -110,7 +118,7 @@ class _PerfilViewState extends State<PerfilView> {
       'telefone': _telefone.text,
       'data_nascimento': _nascimento.text,
       'foto': _foto,
-      'preferencias': _prefs.toJson(),
+      'preferencias': prefsJson,
     });
     if (!mounted) return;
     if (ok) {
@@ -154,7 +162,7 @@ class _PerfilViewState extends State<PerfilView> {
               if (_erro != null) ...[ErrorBox(_erro!), const SizedBox(height: 16)],
               _dadosPessoais(),
               const SizedBox(height: AppLayout.gutter),
-              _preferencias(),
+              _preferencias(u),
               const SizedBox(height: AppLayout.gutter),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -237,7 +245,7 @@ class _PerfilViewState extends State<PerfilView> {
                               ),
                               child: AppIconButton(
                                 icon: LucideIcons.camera,
-                                label: 'Alterar foto',
+                                label: 'Alterar foto (JPG ou PNG, até 2 MB)',
                                 background: AppColors.forest,
                                 foreground: Colors.white,
                                 onPressed: _escolherFoto,
@@ -262,23 +270,6 @@ class _PerfilViewState extends State<PerfilView> {
                           Pill(u.perfil, tone: u.isAdmin ? PillTone.forest : PillTone.sage),
                           const Pill('Sessão ativa', tone: PillTone.ok, dot: true),
                         ]),
-                        const SizedBox(height: 20),
-                        Row(children: [
-                          AppButton('Enviar foto',
-                              size: ButtonSize.sm,
-                              variant: ButtonVariant.secondary,
-                              icon: LucideIcons.upload,
-                              onPressed: _escolherFoto),
-                          if (_foto != null) ...[
-                            const SizedBox(width: 8),
-                            AppButton('Remover',
-                                size: ButtonSize.sm,
-                                variant: ButtonVariant.ghost,
-                                onPressed: () => setState(() => _foto = null)),
-                          ],
-                        ]),
-                        const SizedBox(height: 8),
-                        Text('JPG ou PNG, até 2 MB.', style: AppText.sans(11, color: AppColors.caption)),
                       ],
                     ),
                   ),
@@ -373,113 +364,131 @@ class _PerfilViewState extends State<PerfilView> {
         ),
       );
 
-  Widget _preferencias() {
+  Widget _preferencias(UserModel u) {
     Widget campo(String label, Widget child) => LabeledField(label: label, child: child);
+    final isAdmin = u.isAdmin;
+    final podeExportar = u.pode('dados.exportar');
+    final idioma = campo(
+      'Idioma',
+      AppSelect<String>(
+        semanticLabel: 'Idioma',
+        icon: LucideIcons.languages,
+        width: double.infinity,
+        value: _prefs.idioma,
+        options: const [('pt-BR', 'Português (Brasil)'), ('en', 'English'), ('es', 'Español')],
+        onChanged: (v) => setState(() => _prefs = _prefs.copyWith(idioma: v)),
+      ),
+    );
+    final formatoData = campo(
+      'Formato de data',
+      AppSelect<String>(
+        semanticLabel: 'Formato de data',
+        icon: LucideIcons.calendarDays,
+        width: double.infinity,
+        value: _prefs.formatoData,
+        options: const [('DD/MM/AAAA', 'DD/MM/AAAA'), ('AAAA-MM-DD', 'AAAA-MM-DD')],
+        onChanged: (v) => setState(() => _prefs = _prefs.copyWith(formatoData: v)),
+      ),
+    );
+    final ufPadrao = campo(
+      'UF padrão',
+      AppSelect<String>(
+        semanticLabel: 'UF padrão',
+        icon: LucideIcons.mapPin,
+        width: double.infinity,
+        value: _prefs.ufPadrao ?? '',
+        options: [('', 'Todas UFs'), for (final uf in _ufs) (uf, uf)],
+        onChanged: (v) => setState(() => _prefs = _prefs.copyWith(ufPadrao: () => v.isEmpty ? null : v)),
+      ),
+    );
+    final trimestrePadrao = campo(
+      'Trimestre padrão',
+      AppSelect<int>(
+        semanticLabel: 'Trimestre padrão',
+        icon: LucideIcons.calendar,
+        width: double.infinity,
+        value: _prefs.trimestrePadrao,
+        options: [for (final t in [1, 2, 3, 4]) (t, fmtTrimestre(t))],
+        onChanged: (v) => setState(() => _prefs = _prefs.copyWith(trimestrePadrao: v)),
+      ),
+    );
+    final tema = campo(
+      'Tema',
+      SegmentedPill<String>(
+        value: _prefs.tema,
+        options: const [('claro', 'Claro'), ('escuro', 'Escuro'), ('sistema', 'Sistema')],
+        onChanged: (v) => setState(() => _prefs = _prefs.copyWith(tema: v)),
+      ),
+    );
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Preferências', style: AppText.cardTitle()),
           const SizedBox(height: 20),
-          Row(children: [
-            Expanded(
-              child: campo(
-                'Idioma',
-                AppSelect<String>(
-                  semanticLabel: 'Idioma',
-                  icon: LucideIcons.languages,
-                  width: double.infinity,
-                  value: _prefs.idioma,
-                  options: const [('pt-BR', 'Português (Brasil)'), ('en', 'English'), ('es', 'Español')],
-                  onChanged: (v) => setState(() => _prefs = _prefs.copyWith(idioma: v)),
+          if (podeExportar) ...[
+            Row(children: [
+              Expanded(child: idioma),
+              const SizedBox(width: 16),
+              Expanded(child: formatoData),
+              const SizedBox(width: 16),
+              Expanded(
+                child: campo(
+                  'Exportar como',
+                  AppSelect<String>(
+                    semanticLabel: 'Exportar como',
+                    icon: LucideIcons.fileDown,
+                    width: double.infinity,
+                    value: _prefs.formatoExportacao,
+                    options: const [('CSV', 'CSV'), ('PDF', 'PDF'), ('XLSX', 'XLSX')],
+                    onChanged: (v) => setState(() => _prefs = _prefs.copyWith(formatoExportacao: v)),
+                  ),
                 ),
               ),
+            ]),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: ufPadrao),
+              const SizedBox(width: 16),
+              Expanded(child: trimestrePadrao),
+              const SizedBox(width: 16),
+              Expanded(child: tema),
+            ]),
+          ] else ...[
+            Row(children: [
+              Expanded(child: idioma),
+              const SizedBox(width: 16),
+              Expanded(child: formatoData),
+              const SizedBox(width: 16),
+              Expanded(child: tema),
+            ]),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: ufPadrao),
+              const SizedBox(width: 16),
+              Expanded(child: trimestrePadrao),
+              const SizedBox(width: 16),
+              const Expanded(child: SizedBox()),
+            ]),
+          ],
+          if (isAdmin) ...[
+            const SizedBox(height: 20),
+            const Divider(height: 1, color: AppColors.slate100),
+            ToggleRow(
+              on: _prefs.resumoSemanal,
+              onChanged: (v) => setState(() => _prefs = _prefs.copyWith(resumoSemanal: v)),
+              label: 'Resumo semanal por e-mail',
+              desc: 'Principais variações de despesas toda segunda-feira',
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: campo(
-                'Formato de data',
-                AppSelect<String>(
-                  semanticLabel: 'Formato de data',
-                  icon: LucideIcons.calendarDays,
-                  width: double.infinity,
-                  value: _prefs.formatoData,
-                  options: const [('DD/MM/AAAA', 'DD/MM/AAAA'), ('AAAA-MM-DD', 'AAAA-MM-DD')],
-                  onChanged: (v) => setState(() => _prefs = _prefs.copyWith(formatoData: v)),
-                ),
-              ),
+            const Divider(height: 1, color: AppColors.slate100),
+            ToggleRow(
+              on: _prefs.alertaNovosDados,
+              onChanged: (v) => setState(() => _prefs = _prefs.copyWith(alertaNovosDados: v)),
+              label: 'Avisar quando houver novos dados da ANS',
+              desc: 'Notificação quando um novo trimestre for publicado',
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: campo(
-                'Exportar como',
-                AppSelect<String>(
-                  semanticLabel: 'Exportar como',
-                  icon: LucideIcons.fileDown,
-                  width: double.infinity,
-                  value: _prefs.formatoExportacao,
-                  options: const [('CSV', 'CSV'), ('PDF', 'PDF'), ('XLSX', 'XLSX')],
-                  onChanged: (v) => setState(() => _prefs = _prefs.copyWith(formatoExportacao: v)),
-                ),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(
-              child: campo(
-                'UF padrão',
-                AppSelect<String>(
-                  semanticLabel: 'UF padrão',
-                  icon: LucideIcons.mapPin,
-                  width: double.infinity,
-                  value: _prefs.ufPadrao ?? '',
-                  options: [('', 'Todas UFs'), for (final u in _ufs) (u, u)],
-                  onChanged: (v) => setState(() => _prefs = _prefs.copyWith(ufPadrao: () => v.isEmpty ? null : v)),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: campo(
-                'Trimestre padrão',
-                AppSelect<int>(
-                  semanticLabel: 'Trimestre padrão',
-                  icon: LucideIcons.calendar,
-                  width: double.infinity,
-                  value: _prefs.trimestrePadrao,
-                  options: [for (final t in [1, 2, 3, 4]) (t, fmtTrimestre(t))],
-                  onChanged: (v) => setState(() => _prefs = _prefs.copyWith(trimestrePadrao: v)),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: campo(
-                'Tema',
-                SegmentedPill<String>(
-                  value: _prefs.tema,
-                  options: const [('claro', 'Claro'), ('escuro', 'Escuro'), ('sistema', 'Sistema')],
-                  onChanged: (v) => setState(() => _prefs = _prefs.copyWith(tema: v)),
-                ),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 20),
-          const Divider(height: 1, color: AppColors.slate100),
-          ToggleRow(
-            on: _prefs.resumoSemanal,
-            onChanged: (v) => setState(() => _prefs = _prefs.copyWith(resumoSemanal: v)),
-            label: 'Resumo semanal por e-mail',
-            desc: 'Principais variações de despesas toda segunda-feira',
-          ),
-          const Divider(height: 1, color: AppColors.slate100),
-          ToggleRow(
-            on: _prefs.alertaNovosDados,
-            onChanged: (v) => setState(() => _prefs = _prefs.copyWith(alertaNovosDados: v)),
-            label: 'Avisar quando houver novos dados da ANS',
-            desc: 'Notificação quando um novo trimestre for publicado',
-          ),
+          ],
         ],
       ),
     );

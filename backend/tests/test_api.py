@@ -489,7 +489,12 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
                 "cargo": "Analista Externo",
                 "data_nascimento": "1994-03-12",
                 "foto": "data:image/png;base64,iVBORw0KGgo=",
-                "preferencias": {"tema": "sistema", "formato_exportacao": "PDF"},
+                "preferencias": {
+                    "tema": "sistema",
+                    "formato_exportacao": "PDF",
+                    "resumo_semanal": False,
+                    "alerta_novos_dados": False,
+                },
             },
             headers=h,
         )
@@ -497,8 +502,25 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         u = res.get_json()["usuario"]
         self.assertEqual(u["cargo"], "Analista Externo")
         self.assertEqual(u["data_nascimento"], "1994-03-12")
-        self.assertEqual(u["preferencias"]["formato_exportacao"], "PDF")
+        # Preferências exclusivas de Administrador não são alteradas por Colaborador.
+        self.assertEqual(u["preferencias"]["formato_exportacao"], "CSV")
+        self.assertTrue(u["preferencias"]["resumo_semanal"])
+        self.assertTrue(u["preferencias"]["alerta_novos_dados"])
+        self.assertEqual(u["preferencias"]["tema"], "sistema")
         self.assertEqual(u["preferencias"]["idioma"], "pt-BR")
+
+        admin = self._auth_headers(self._login("admin@intuitivecare.com.br", "Admin@2025"))
+        res_admin = self.client.put(
+            "/api/auth/me",
+            json={"preferencias": {"formato_exportacao": "PDF", "resumo_semanal": False, "alerta_novos_dados": False}},
+            headers=admin,
+        )
+        self.assertEqual(res_admin.status_code, 200)
+        prefs_admin = res_admin.get_json()["usuario"]["preferencias"]
+        self.assertEqual(prefs_admin["formato_exportacao"], "PDF")
+        self.assertFalse(prefs_admin["resumo_semanal"])
+        self.assertFalse(prefs_admin["alerta_novos_dados"])
+
         ruim = self.client.put("/api/auth/me", json={"foto": "data:image/gif;base64,AAA"}, headers=h)
         self.assertEqual(ruim.status_code, 400)
 

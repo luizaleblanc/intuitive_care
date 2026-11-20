@@ -182,18 +182,16 @@ class _BarraControles extends StatelessWidget {
             const SizedBox(width: 8),
             Text('PERÍODO', style: AppText.eyebrow()),
           ]),
-          SizedBox(
-            width: 440,
-            child: SegmentedPill<ModoPeriodo>(
-              value: f.modo,
-              options: const [
-                (ModoPeriodo.ano, 'Ano'),
-                (ModoPeriodo.intervalo, 'Intervalo'),
-                (ModoPeriodo.ultimos, 'Últimos anos'),
-                (ModoPeriodo.especificos, 'Anos específicos'),
-              ],
-              onChanged: (m) => vm.aplicar(f.copyWith(modo: m)),
-            ),
+          SegmentedPill<ModoPeriodo>(
+            value: f.modo,
+            expand: false,
+            options: const [
+              (ModoPeriodo.ano, 'Ano'),
+              (ModoPeriodo.intervalo, 'Intervalo'),
+              (ModoPeriodo.ultimos, 'Últimos anos'),
+              (ModoPeriodo.especificos, 'Anos específicos'),
+            ],
+            onChanged: (m) => vm.aplicar(f.copyWith(modo: m)),
           ),
           if (f.modo == ModoPeriodo.ano)
             AppSelect<int>(
@@ -266,13 +264,11 @@ class _BarraControles extends StatelessWidget {
         ),
         // Linha 2: visualização, comparação e ferramentas
         Row(children: [
-          SizedBox(
-            width: 230,
-            child: SegmentedPill<String>(
-              value: f.granularidade,
-              options: const [('ano', 'Por ano'), ('trimestre', 'Por trimestre')],
-              onChanged: (g) => vm.aplicar(f.copyWith(granularidade: g)),
-            ),
+          SegmentedPill<String>(
+            value: f.granularidade,
+            expand: false,
+            options: const [('ano', 'Por ano'), ('trimestre', 'Por trimestre')],
+            onChanged: (g) => vm.aplicar(f.copyWith(granularidade: g)),
           ),
           const SizedBox(width: 16),
           _Interruptor(

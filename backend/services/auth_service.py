@@ -205,7 +205,12 @@ class AuthService:
             prefs = data.get("preferencias") or {}
             if not isinstance(prefs, dict):
                 raise BusinessRuleError("Preferências inválidas.", 400)
+            atual = UsuarioRepository.find_by_id(user_id) or {}
+            usuario_atual = Usuario.from_row(atual) if atual else None
             limpas = {k: prefs[k] for k in PREFERENCIAS_PADRAO if k in prefs}
+            if usuario_atual and not usuario_atual.is_admin:
+                for chave_admin in ("formato_exportacao", "resumo_semanal", "alerta_novos_dados"):
+                    limpas.pop(chave_admin, None)
             if limpas.get("tema") not in (None, "claro", "escuro", "sistema"):
                 raise BusinessRuleError("Tema inválido.", 400)
             if limpas.get("formato_exportacao") not in (None, "CSV", "PDF", "XLSX"):
@@ -214,8 +219,7 @@ class AuthService:
                 raise BusinessRuleError("Trimestre padrão inválido.", 400)
             if "graficos_explorar" in limpas:
                 limpas["graficos_explorar"] = validar_graficos(limpas["graficos_explorar"])
-            atual = UsuarioRepository.find_by_id(user_id) or {}
-            base = Usuario.from_row(atual).preferencias if atual else dict(PREFERENCIAS_PADRAO)
+            base = usuario_atual.preferencias if usuario_atual else dict(PREFERENCIAS_PADRAO)
             base.update(limpas)
             campos["preferencias"] = json.dumps(base, ensure_ascii=False)
 
