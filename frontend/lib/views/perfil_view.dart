@@ -12,6 +12,7 @@ import '../shared/ui/ui.dart';
 import '../shared/utils/formatters.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import 'app_shell.dart';
+import 'relatorio_drawer.dart';
 
 const _ufs = [
   'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', //
@@ -103,12 +104,11 @@ class _PerfilViewState extends State<PerfilView> {
     final vm = context.read<AuthViewModel>();
     final toast = context.read<ToastController>();
     final u = vm.currentUser;
-    final prefsJson = Map<String, dynamic>.from(_prefs.toJson());
-    if (u != null && !u.isAdmin) {
-      prefsJson
-        ..remove('formato_exportacao')
-        ..remove('resumo_semanal')
-        ..remove('alerta_novos_dados');
+    final prefsJson = Map<String, dynamic>.from(_prefs.toJson())
+      ..remove('resumo_semanal')
+      ..remove('alerta_novos_dados');
+    if (u != null && !u.pode('dados.exportar')) {
+      prefsJson.remove('formato_exportacao');
     }
     setState(() => _erro = null);
     final ok = await vm.updateProfile({
@@ -366,19 +366,7 @@ class _PerfilViewState extends State<PerfilView> {
 
   Widget _preferencias(UserModel u) {
     Widget campo(String label, Widget child) => LabeledField(label: label, child: child);
-    final isAdmin = u.isAdmin;
     final podeExportar = u.pode('dados.exportar');
-    final idioma = campo(
-      'Idioma',
-      AppSelect<String>(
-        semanticLabel: 'Idioma',
-        icon: LucideIcons.languages,
-        width: double.infinity,
-        value: _prefs.idioma,
-        options: const [('pt-BR', 'Português (Brasil)'), ('en', 'English'), ('es', 'Español')],
-        onChanged: (v) => setState(() => _prefs = _prefs.copyWith(idioma: v)),
-      ),
-    );
     final formatoData = campo(
       'Formato de data',
       AppSelect<String>(
@@ -429,8 +417,6 @@ class _PerfilViewState extends State<PerfilView> {
           const SizedBox(height: 20),
           if (podeExportar) ...[
             Row(children: [
-              Expanded(child: idioma),
-              const SizedBox(width: 16),
               Expanded(child: formatoData),
               const SizedBox(width: 16),
               Expanded(
@@ -446,19 +432,61 @@ class _PerfilViewState extends State<PerfilView> {
                   ),
                 ),
               ),
+              const SizedBox(width: 16),
+              Expanded(child: tema),
             ]),
             const SizedBox(height: 16),
             Row(children: [
               Expanded(child: ufPadrao),
               const SizedBox(width: 16),
               Expanded(child: trimestrePadrao),
-              const SizedBox(width: 16),
-              Expanded(child: tema),
             ]),
+            const SizedBox(height: 20),
+            const Divider(height: 1, color: AppColors.slate100),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.sage.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.forest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(LucideIcons.fileSpreadsheet, size: 18, color: AppColors.mint),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Relatório personalizado (planilha)',
+                            style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.forest)),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Monte e exporte um relatório conciso com os dados extraídos da ANS por período, seções, métricas e filtros.',
+                          style: AppText.sans(12, color: AppColors.forest.withValues(alpha: 0.78)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  AppButton(
+                    'Exportar planilha',
+                    icon: LucideIcons.download,
+                    onPressed: () => abrirRelatorioPersonalizado(context),
+                  ),
+                ],
+              ),
+            ),
           ] else ...[
             Row(children: [
-              Expanded(child: idioma),
-              const SizedBox(width: 16),
               Expanded(child: formatoData),
               const SizedBox(width: 16),
               Expanded(child: tema),
@@ -468,26 +496,7 @@ class _PerfilViewState extends State<PerfilView> {
               Expanded(child: ufPadrao),
               const SizedBox(width: 16),
               Expanded(child: trimestrePadrao),
-              const SizedBox(width: 16),
-              const Expanded(child: SizedBox()),
             ]),
-          ],
-          if (isAdmin) ...[
-            const SizedBox(height: 20),
-            const Divider(height: 1, color: AppColors.slate100),
-            ToggleRow(
-              on: _prefs.resumoSemanal,
-              onChanged: (v) => setState(() => _prefs = _prefs.copyWith(resumoSemanal: v)),
-              label: 'Resumo semanal por e-mail',
-              desc: 'Principais variações de despesas toda segunda-feira',
-            ),
-            const Divider(height: 1, color: AppColors.slate100),
-            ToggleRow(
-              on: _prefs.alertaNovosDados,
-              onChanged: (v) => setState(() => _prefs = _prefs.copyWith(alertaNovosDados: v)),
-              label: 'Avisar quando houver novos dados da ANS',
-              desc: 'Notificação quando um novo trimestre for publicado',
-            ),
           ],
         ],
       ),

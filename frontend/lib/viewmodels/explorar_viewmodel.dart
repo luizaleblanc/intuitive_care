@@ -194,6 +194,9 @@ class ExplorarViewModel extends ChangeNotifier {
     }
   }
 
+  /// Consulta pontual usada pelo construtor de relatório personalizado (sem alterar a tela Explorar).
+  Future<ExplorarModel> consultarRelatorio(Map<String, String> consulta) => _repository.explorar(consulta);
+
   Future<void> aplicar(FiltrosExplorar novos) async {
     // Intervalo invertido é corrigido na hora, antes de consultar.
     if (novos.modo == ModoPeriodo.intervalo &&

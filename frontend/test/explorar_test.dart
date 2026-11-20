@@ -9,6 +9,7 @@ import 'package:intuitive_care_app/repositories/analitico_repository.dart';
 import 'package:intuitive_care_app/services/analitico_service.dart';
 import 'package:intuitive_care_app/services/api_client.dart';
 import 'package:intuitive_care_app/viewmodels/explorar_viewmodel.dart';
+import 'package:intuitive_care_app/views/relatorio_drawer.dart';
 
 Map<String, dynamic> _resposta(Map<String, String> q) => {
       'periodo': {'ano_inicio': int.parse(q['ano_inicio'] ?? '2026'), 'ano_fim': 2026, 'granularidade': q['granularidade']},
@@ -108,5 +109,22 @@ void main() {
     expect(normalizarApiUrl('https://a.vercel.app/apihttps://a.vercel.app/api'), 'https://a.vercel.app/api');
     expect(normalizarApiUrl(' https://a.vercel.app/api/ '), 'https://a.vercel.app/api');
     expect(normalizarApiUrl(''), '');
+  });
+
+  test('montarAbasRelatorio gera abas e colunas conforme escolha do administrador', () async {
+    await vm.carregar();
+    final abas = montarAbasRelatorio(
+      vm.dados!,
+      const ConfigRelatorio(
+        anos: {2026},
+        trimestres: {1},
+        secoes: {SecaoRelatorio.resumo, SecaoRelatorio.operadoras},
+        metricas: {Metrica.despesas, Metrica.sinistralidade},
+        limiteOperadoras: 10,
+      ),
+    );
+    expect(abas.map((a) => a.titulo).toList(), ['Resumo Executivo', 'Operadoras']);
+    expect(abas[1].colunas, ['Registro ANS', 'Operadora', 'UF', 'Modalidade', 'Status', 'Despesas assistenciais (R\$)', 'Sinistralidade (%)']);
+    expect(abas[1].linhas.single[1], 'AMIL');
   });
 }

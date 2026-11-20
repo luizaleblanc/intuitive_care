@@ -181,7 +181,9 @@ void main() {
     ignorarFontes(tester);
     expect(find.text('Enviar foto'), findsNothing);
     expect(find.text('JPG ou PNG, até 2 MB.'), findsNothing);
+    expect(find.text('Idioma'), findsNothing);
     expect(find.text('Exportar como'), findsNothing);
+    expect(find.text('Exportar planilha'), findsNothing);
     expect(find.text('Resumo semanal por e-mail'), findsNothing);
     expect(find.text('Avisar quando houver novos dados da ANS'), findsNothing);
 
@@ -195,9 +197,11 @@ void main() {
     await tester.pumpAndSettle();
     ignorarFontes(tester);
     expect(find.text('Enviar foto'), findsNothing);
+    expect(find.text('Idioma'), findsNothing);
     expect(find.text('Exportar como'), findsOneWidget);
-    expect(find.text('Resumo semanal por e-mail'), findsOneWidget);
-    expect(find.text('Avisar quando houver novos dados da ANS'), findsOneWidget);
+    expect(find.text('Exportar planilha'), findsOneWidget);
+    expect(find.text('Resumo semanal por e-mail'), findsNothing);
+    expect(find.text('Avisar quando houver novos dados da ANS'), findsNothing);
   });
 }
 
