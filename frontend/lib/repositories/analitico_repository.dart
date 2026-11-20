@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../models/analitico_model.dart';
 import '../models/explorar_model.dart';
 import '../services/analitico_service.dart';
@@ -51,4 +53,10 @@ class AnaliticoRepository {
 
   Future<String> auditarLote(int ano, int trimestre) async =>
       ((await _service.auditarLote(ano, trimestre))['mensagem'] ?? 'Lote auditado').toString();
+
+  Future<({Uint8List bytes, String? filename})> exportarRelatorioBytes(Map<String, dynamic> payload) =>
+      _service.exportarRelatorioBytes(payload);
+
+  Future<Map<String, dynamic>> exportarRelatorioJson(Map<String, dynamic> payload) =>
+      _service.exportarRelatorioJson(payload);
 }

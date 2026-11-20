@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'api_client.dart';
 
 /// Comunicação HTTP com /api/painel e /api/contas.
@@ -51,4 +53,16 @@ class AnaliticoService {
 
   Future<Map<String, dynamic>> auditarLote(int ano, int trimestre) async =>
       Map<String, dynamic>.from(await _client.post('/contas/lotes/$ano/$trimestre/auditar') as Map);
+
+  Future<({Uint8List bytes, String? filename})> exportarRelatorioBytes(Map<String, dynamic> payload) =>
+      _client.postBytes('/relatorios/exportar', body: payload);
+
+  Future<Map<String, dynamic>> exportarRelatorioJson(Map<String, dynamic> payload) async =>
+      Map<String, dynamic>.from(
+        await _client.post(
+          '/relatorios/exportar',
+          body: {...payload, 'formato': 'JSON'},
+          timeout: const Duration(seconds: 60),
+        ) as Map,
+      );
 }

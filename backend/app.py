@@ -16,7 +16,7 @@ def create_app(init_db: bool = True, seed_db: bool = True) -> Flask:
     """Application Factory da API REST Flask do Intuitive Care."""
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, expose_headers=["Content-Disposition"])
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)

@@ -11,31 +11,68 @@ import '../shared/utils/formatters.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/explorar_viewmodel.dart';
 
-/// Seções disponíveis para compor o relatório conciso do Administrador.
+/// Seções disponíveis para compor o relatório analítico do Administrador (visões executivas + bases ETL ANS).
 enum SecaoRelatorio {
-  resumo('Resumo executivo', 'KPIs consolidados e recorte aplicado'),
-  evolucao('Evolução no período', 'Série histórica anual ou trimestral'),
-  modalidades('Por modalidade', 'Participação e indicadores por modalidade'),
-  operadoras('Ranking de operadoras', 'Operadoras do recorte ordenadas pelo indicador');
+  resumo('resumo', 'Resumo executivo', 'KPIs consolidados, fórmulas e rastreabilidade do ETL', false),
+  evolucao('evolucao', 'Evolução no período', 'Série histórica anual ou trimestral com gráfico nativo', false),
+  modalidades('modalidades', 'Por modalidade', 'Participação e indicadores por modalidade ANS com gráfico', false),
+  ufs('ufs', 'Por UF', 'Distribuição regional por unidade federativa', false),
+  operadoras('operadoras', 'Ranking de operadoras', 'Operadoras do recorte ordenadas pelo indicador escolhido', false),
+  contasSetor('contas_setor', 'Plano de Contas ANS', 'Tabela completa contas_setor por código e grupo contábil', true),
+  baseDemonstracoes(
+    'base_demonstracoes',
+    'Base ETL · Demonstrações',
+    'Base fato operadora × trimestre (pronta para tabela dinâmica)',
+    true,
+  ),
+  lotesCadastro(
+    'lotes_cadastro',
+    'Base ETL · Lotes e Cadastro',
+    'Auditoria de lotes extraídos (lotes_etl) e cadastro CADOP (operadoras)',
+    true,
+  );
 
+  final String codigo;
   final String nome;
   final String descricao;
-  const SecaoRelatorio(this.nome, this.descricao);
+  final bool ehBaseEtl;
+  const SecaoRelatorio(this.codigo, this.nome, this.descricao, this.ehBaseEtl);
+
+  static const visoesExecutivas = [resumo, evolucao, modalidades, ufs, operadoras];
+  static const basesEtl = [contasSetor, baseDemonstracoes, lotesCadastro];
 }
 
-/// Configuração escolhida pelo Administrador para montar sua planilha/relatório conciso.
+/// Critérios de ordenação para o ranking de operadoras na exportação do backend.
+enum OrdemRelatorio {
+  despesas('despesas', 'Despesas'),
+  receitas('receitas', 'Receitas'),
+  sinistralidade('sinistralidade', 'Sinistralidade'),
+  beneficiarios('beneficiarios', 'Beneficiários'),
+  resultado('resultado', 'Resultado operacional'),
+  administrativas('administrativas', 'Administrativas');
+
+  final String codigo;
+  final String nome;
+  const OrdemRelatorio(this.codigo, this.nome);
+}
+
+/// Configuração escolhida pelo Administrador para montar a planilha/relatório das bases ETL.
 class ConfigRelatorio {
   final Set<int> anos;
   final Set<int> trimestres;
   final String granularidade;
   final Set<String> ufs;
   final Set<String> modalidades;
+  final Set<String> portes;
   final Set<String> statuses;
+  final Set<String> consolidacoes;
   final Set<SecaoRelatorio> secoes;
   final Set<Metrica> metricas;
   final Metrica ordenarPor;
+  final OrdemRelatorio? ordenarRelatorio;
   final int? limiteOperadoras;
   final String formato;
+  final String formatoData;
 
   const ConfigRelatorio({
     this.anos = const {},
@@ -43,12 +80,18 @@ class ConfigRelatorio {
     this.granularidade = 'ano',
     this.ufs = const {},
     this.modalidades = const {},
+    this.portes = const {},
     this.statuses = const {},
+    this.consolidacoes = const {},
     this.secoes = const {
       SecaoRelatorio.resumo,
       SecaoRelatorio.evolucao,
       SecaoRelatorio.modalidades,
+      SecaoRelatorio.ufs,
       SecaoRelatorio.operadoras,
+      SecaoRelatorio.contasSetor,
+      SecaoRelatorio.baseDemonstracoes,
+      SecaoRelatorio.lotesCadastro,
     },
     this.metricas = const {
       Metrica.despesas,
@@ -57,9 +100,59 @@ class ConfigRelatorio {
       Metrica.beneficiarios,
     },
     this.ordenarPor = Metrica.despesas,
-    this.limiteOperadoras = 25,
+    this.ordenarRelatorio,
+    this.limiteOperadoras = 50,
     this.formato = 'XLSX',
+    this.formatoData = 'DD/MM/AAAA',
   });
+
+  /// Monta o payload JSON enviado ao endpoint `POST /api/relatorios/exportar`.
+  Map<String, dynamic> toApiPayload({String? formatoOverride}) {
+    final anosOrd = anos.toList()..sort();
+    final trisOrd = trimestres.toList()..sort();
+    final secoesOrd = [for (final s in SecaoRelatorio.values) if (secoes.contains(s)) s.codigo];
+    return {
+      'anos': anosOrd,
+      'trimestres': trisOrd,
+      'granularidade': granularidade,
+      'ufs': ufs.toList()..sort(),
+      'modalidades': modalidades.toList()..sort(),
+      'portes': portes.toList()..sort(),
+      'statuses': statuses.toList()..sort(),
+      'consolidacoes': consolidacoes.toList()..sort(),
+      'secoes': secoesOrd,
+      'ordenar_por': (ordenarRelatorio?.codigo ?? ordenarPor.codigo),
+      'limite_operadoras': limiteOperadoras,
+      'formato': (formatoOverride ?? formato).toUpperCase(),
+      'formato_data': formatoData,
+    };
+  }
+}
+
+/// Converte o retorno JSON de `POST /api/relatorios/exportar` (formato `JSON`) em tabelas prontas para PDF.
+({String tituloGeral, String subtituloGeral, String nomeBase, List<ExportTable> abas}) parseRelatorioJson(
+  Map<String, dynamic> json,
+) {
+  final abasRaw = (json['abas'] as List? ?? const []);
+  final abas = <ExportTable>[
+    for (final item in abasRaw)
+      if (item is Map)
+        ExportTable(
+          titulo: (item['titulo'] ?? 'Seção').toString(),
+          subtitulo: item['subtitulo']?.toString(),
+          colunas: [for (final c in (item['colunas'] as List? ?? const [])) c.toString()],
+          linhas: [
+            for (final l in (item['linhas'] as List? ?? const []))
+              if (l is List) [for (final v in l) v?.toString() ?? ''],
+          ],
+        ),
+  ];
+  return (
+    tituloGeral: (json['titulo_geral'] ?? 'Relatório Analítico ANS · Intuitive Care').toString(),
+    subtituloGeral: (json['subtitulo_geral'] ?? '').toString(),
+    nomeBase: (json['nome_base'] ?? 'relatorio_etl_ans').toString(),
+    abas: abas,
+  );
 }
 
 String _fmtValorMetrica(Metrica m, Valores v) => switch (m) {
@@ -101,7 +194,7 @@ String _rotuloRecorte(ExplorarModel dados, ConfigRelatorio cfg) {
   ].join(' · ');
 }
 
-/// Monta as abas/seções concisas do relatório personalizado a partir dos dados extraídos da ANS.
+/// Monta abas concisas client-side a partir de [ExplorarModel] (mantido para compatibilidade e fallback).
 List<ExportTable> montarAbasRelatorio(ExplorarModel dados, ConfigRelatorio cfg) {
   final metricas = [for (final m in Metrica.values) if (cfg.metricas.contains(m)) m];
   final subtitulo = _rotuloRecorte(dados, cfg);
@@ -114,8 +207,16 @@ List<ExportTable> montarAbasRelatorio(ExplorarModel dados, ConfigRelatorio cfg) 
         subtitulo: subtitulo,
         colunas: const ['Indicador', 'Valor', 'Detalhe'],
         linhas: [
-          ['Período analisado', _rotuloRecorte(dados, cfg).split(' · ').first.replaceFirst('Período ', ''), cfg.granularidade == 'ano' ? 'Agrupamento anual' : 'Agrupamento trimestral'],
-          ['Operadoras no recorte', fmtInt(dados.totalOperadoras), cfg.statuses.isEmpty ? 'Ativas e inativas conforme filtro' : (cfg.statuses.toList()..sort()).join(', ')],
+          [
+            'Período analisado',
+            _rotuloRecorte(dados, cfg).split(' · ').first.replaceFirst('Período ', ''),
+            cfg.granularidade == 'ano' ? 'Agrupamento anual' : 'Agrupamento trimestral',
+          ],
+          [
+            'Operadoras no recorte',
+            fmtInt(dados.totalOperadoras),
+            cfg.statuses.isEmpty ? 'Ativas e inativas conforme filtro' : (cfg.statuses.toList()..sort()).join(', '),
+          ],
           for (final m in metricas) [m.nome, _fmtValorResumo(m, dados.kpis), m.descricao],
         ],
       ),
@@ -184,19 +285,19 @@ List<ExportTable> montarAbasRelatorio(ExplorarModel dados, ConfigRelatorio cfg) 
   return abas;
 }
 
-/// Abre o construtor de relatório conciso (planilha XLSX / CSV / PDF) exclusivo do Administrador.
+/// Abre o construtor de relatório personalizado (planilha XLSX com openpyxl / CSV / PDF) exclusivo do Administrador.
 void abrirRelatorioPersonalizado(BuildContext context) {
-  showSideDrawer<void>(context, width: 540, builder: (_) => const _RelatorioDrawer());
+  showSideDrawer<void>(context, width: 580, builder: (_) => const RelatorioDrawer());
 }
 
-class _RelatorioDrawer extends StatefulWidget {
-  const _RelatorioDrawer();
+class RelatorioDrawer extends StatefulWidget {
+  const RelatorioDrawer({super.key});
 
   @override
-  State<_RelatorioDrawer> createState() => _RelatorioDrawerState();
+  State<RelatorioDrawer> createState() => _RelatorioDrawerState();
 }
 
-class _RelatorioDrawerState extends State<_RelatorioDrawer> {
+class _RelatorioDrawerState extends State<RelatorioDrawer> {
   List<int> _anosDisponiveis = const [];
   Facetas _facetas = const Facetas();
   Set<int> _anos = {};
@@ -204,12 +305,14 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
   String _granularidade = 'ano';
   Set<String> _ufs = {};
   Set<String> _modalidades = {};
+  Set<String> _portes = {};
   Set<String> _statuses = {};
+  Set<String> _consolidacoes = {};
   Set<SecaoRelatorio> _secoes = Set.of(SecaoRelatorio.values);
-  Set<Metrica> _metricas = Set.of(Metrica.values);
-  Metrica _ordenarPor = Metrica.despesas;
-  int? _limite = 25;
+  OrdemRelatorio _ordenarPor = OrdemRelatorio.despesas;
+  int? _limite = 50;
   String _formato = 'XLSX';
+  String _formatoData = 'DD/MM/AAAA';
   bool _carregandoBase = true;
   bool _gerando = false;
   String? _erro;
@@ -217,9 +320,14 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
   @override
   void initState() {
     super.initState();
-    final prefFormato = context.read<AuthViewModel>().currentUser?.preferencias.formatoExportacao;
-    if (prefFormato != null && const {'XLSX', 'CSV', 'PDF'}.contains(prefFormato)) {
-      _formato = prefFormato;
+    final prefs = context.read<AuthViewModel>().currentUser?.preferencias;
+    if (prefs != null) {
+      if (const {'XLSX', 'CSV', 'PDF'}.contains(prefs.formatoExportacao)) {
+        _formato = prefs.formatoExportacao;
+      }
+      if (const {'DD/MM/AAAA', 'AAAA-MM-DD'}.contains(prefs.formatoData)) {
+        _formatoData = prefs.formatoData;
+      }
     }
     _carregarOpcoes();
   }
@@ -236,53 +344,80 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
         _carregandoBase = false;
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() { _erro = e.message; _carregandoBase = false; });
+      if (mounted) {
+        setState(() {
+          _erro = e.message;
+          _carregandoBase = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _erro = 'Não foi possível carregar as opções do relatório: $e'; _carregandoBase = false; });
+      if (mounted) {
+        setState(() {
+          _erro = 'Não foi possível carregar as opções do relatório: $e';
+          _carregandoBase = false;
+        });
+      }
     }
   }
 
+  int get _quantidadeAbasXlsx {
+    var total = _secoes.length;
+    // A seção "Base ETL · Lotes e Cadastro" gera duas abas no XLSX: "Lotes ETL" e "Cadastro Operadoras".
+    if (_secoes.contains(SecaoRelatorio.lotesCadastro)) total += 1;
+    return total;
+  }
+
   Future<void> _gerar() async {
-    if (_anos.isEmpty || _secoes.isEmpty || _metricas.isEmpty) return;
-    setState(() { _gerando = true; _erro = null; });
+    if (_anos.isEmpty || _secoes.isEmpty) return;
+    setState(() {
+      _gerando = true;
+      _erro = null;
+    });
     final vm = context.read<ExplorarViewModel>();
     final toast = context.read<ToastController>();
     final anosOrd = _anos.toList()..sort();
-    final trisOrd = _trimestres.toList()..sort();
-    final consulta = {
-      'anos': anosOrd.join(','),
-      'trimestres': trisOrd.join(','),
-      'granularidade': _granularidade,
-      'uf': (_ufs.toList()..sort()).join(','),
-      'modalidade': (_modalidades.toList()..sort()).join(','),
-      'status': (_statuses.toList()..sort()).join(','),
-    };
+    final sufixoAnos = anosOrd.length == 1 ? '${anosOrd.first}' : '${anosOrd.first}_${anosOrd.last}';
+
+    final cfg = ConfigRelatorio(
+      anos: _anos,
+      trimestres: _trimestres,
+      granularidade: _granularidade,
+      ufs: _ufs,
+      modalidades: _modalidades,
+      portes: _portes,
+      statuses: _statuses,
+      consolidacoes: _consolidacoes,
+      secoes: _secoes,
+      ordenarRelatorio: _ordenarPor,
+      limiteOperadoras: _limite,
+      formato: _formato,
+      formatoData: _formatoData,
+    );
+
     try {
-      final dados = await vm.consultarRelatorio(consulta);
-      final cfg = ConfigRelatorio(
-        anos: _anos,
-        trimestres: _trimestres,
-        granularidade: _granularidade,
-        ufs: _ufs,
-        modalidades: _modalidades,
-        statuses: _statuses,
-        secoes: _secoes,
-        metricas: _metricas,
-        ordenarPor: _ordenarPor,
-        limiteOperadoras: _limite,
-        formato: _formato,
-      );
-      final abas = montarAbasRelatorio(dados, cfg);
-      final sufixoAnos = anosOrd.length == 1 ? '${anosOrd.first}' : '${anosOrd.first}_${anosOrd.last}';
-      final nome = await Exporter.exportarRelatorio(
-        abas,
-        nomeBase: 'relatorio_ans_$sufixoAnos',
-        formato: _formato,
-        tituloGeral: 'Relatório Analítico ANS · Intuitive Care',
-        subtituloGeral: _rotuloRecorte(dados, cfg),
-      );
+      late final String nomeFinal;
+      if (_formato == 'PDF') {
+        final resposta = await vm.exportarRelatorioJson(cfg.toApiPayload(formatoOverride: 'JSON'));
+        final parsed = parseRelatorioJson(resposta);
+        if (parsed.abas.isEmpty) {
+          throw const ApiException(statusCode: 404, message: 'Não há dados para compor o relatório com esses filtros.');
+        }
+        nomeFinal = await Exporter.exportarRelatorio(
+          parsed.abas,
+          nomeBase: parsed.nomeBase,
+          formato: 'PDF',
+          tituloGeral: parsed.tituloGeral,
+          subtituloGeral: parsed.subtituloGeral,
+        );
+      } else {
+        final resposta = await vm.exportarRelatorioBytes(cfg.toApiPayload());
+        final ext = _formato == 'CSV' ? 'csv' : 'xlsx';
+        final mime = _formato == 'CSV' ? Exporter.mimeCsv : Exporter.mimeXlsx;
+        final nome = resposta.filename ?? 'relatorio_etl_ans_$sufixoAnos.$ext';
+        nomeFinal = Exporter.salvarBytes(resposta.bytes, nome, mime);
+      }
       if (!mounted) return;
-      toast.show('Relatório exportado ($nome)');
+      toast.show('Relatório exportado ($nomeFinal)');
       Navigator.of(context).pop();
     } on ApiException catch (e) {
       if (mounted) setState(() => _erro = e.message);
@@ -293,15 +428,48 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
     }
   }
 
-  Widget _secao(String titulo, String ajuda, Widget conteudo) => Padding(
+  Widget _secao(String titulo, String ajuda, Widget conteudo, {Widget? trailing}) => Padding(
         padding: const EdgeInsets.only(bottom: 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(titulo, style: AppText.display(14, weight: FontWeight.w700, color: AppColors.sageText)),
+          Row(children: [
+            Expanded(child: Text(titulo, style: AppText.display(14, weight: FontWeight.w700, color: AppColors.sageText))),
+            ?trailing,
+          ]),
           const SizedBox(height: 2),
           Text(ajuda, style: AppText.sans(12, color: AppColors.sageMuted)),
           const SizedBox(height: 10),
           conteudo,
         ]),
+      );
+
+  Widget _subgrupo(String titulo, List<SecaoRelatorio> itens) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            titulo.toUpperCase(),
+            style: AppText.sans(10, weight: FontWeight.w700, color: AppColors.sageMuted, spacing: 0.9),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final s in itens)
+                Tooltip(
+                  message: s.descricao,
+                  child: _chip(s.nome, _secoes.contains(s), () {
+                    setState(() {
+                      if (_secoes.contains(s) && _secoes.length > 1) {
+                        _secoes = {..._secoes}..remove(s);
+                      } else {
+                        _secoes = {..._secoes, s};
+                      }
+                    });
+                  }),
+                ),
+            ],
+          ),
+        ],
       );
 
   Widget _chip(String rotulo, bool ativo, VoidCallback onTap) => Semantics(
@@ -314,24 +482,44 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
             customBorder: const StadiumBorder(),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 if (ativo) ...[
                   const Icon(LucideIcons.check, size: 13, color: AppColors.mint),
                   const SizedBox(width: 6),
                 ],
-                Text(rotulo,
-                    style: AppText.sans(12, weight: FontWeight.w600, color: ativo ? Colors.white : AppColors.sageText)),
+                Flexible(
+                  child: Text(
+                    rotulo,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.sans(12, weight: FontWeight.w600, color: ativo ? Colors.white : AppColors.sageText),
+                  ),
+                ),
               ]),
             ),
           ),
         ),
       );
 
+  Widget _atalhoSecoes(String rotulo, VoidCallback onTap) => InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(rotulo, style: AppText.sans(11, weight: FontWeight.w700, color: AppColors.brandText)),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     AppColors.watchDark(context);
-    final podeGerar = !_carregandoBase && !_gerando && _anos.isNotEmpty && _secoes.isNotEmpty && _metricas.isNotEmpty;
+    final podeGerar = !_carregandoBase && !_gerando && _anos.isNotEmpty && _secoes.isNotEmpty;
+    final resumoFormato = switch (_formato) {
+      'XLSX' => '$_quantidadeAbasXlsx aba(s) com fórmulas vivas, gráficos nativos e formatação contábil ANS',
+      'CSV' => '${_secoes.length} bloco(s) em UTF-8 BOM compatível com Excel e BI',
+      _ => '${_secoes.length} seção(ões) estruturadas direto das bases ETL da ANS',
+    };
+
     return Container(
       color: AppColors.sage,
       child: Column(
@@ -340,41 +528,46 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 24, 16, 4),
             child: Row(children: [
-              Expanded(child: Text('Exportar relatório personalizado', style: AppText.display(20, color: AppColors.sageText))),
+              Expanded(
+                child: Text(
+                  'Exportar relatório ETL (ANS)',
+                  style: AppText.display(20, color: AppColors.sageText),
+                ),
+              ),
               AppIconButton(icon: LucideIcons.x, label: 'Fechar', onPressed: () => Navigator.of(context).pop()),
             ]),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              'Monte uma planilha concisa com os dados extraídos da ANS escolhendo período, seções, métricas e filtros.',
+              'Gere planilhas analíticas diretamente sobre todas as bases do ETL da ANS com filtros avançados, fórmulas e gráficos.',
               style: AppText.sans(13, color: AppColors.sageMuted),
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
             child: _carregandoBase
-                ? const LoadingBlock(label: 'Carregando anos e filtros disponíveis...')
+                ? const LoadingBlock(label: 'Carregando filtros...')
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
                     children: [
                       if (_erro != null) ...[ErrorBox(_erro!), const SizedBox(height: 16)],
                       _secao(
                         'Formato do arquivo',
-                        'XLSX gera abas separadas por seção; CSV e PDF consolidam em um único arquivo.',
+                        resumoFormato,
                         SegmentedPill<String>(
                           value: _formato,
                           options: const [
-                            ('XLSX', 'Planilha (XLSX)'),
+                            ('XLSX', 'XLSX'),
                             ('CSV', 'CSV'),
-                            ('PDF', 'Relatório (PDF)'),
+                            ('PDF', 'PDF'),
                           ],
                           onChanged: (v) => setState(() => _formato = v),
                         ),
                       ),
                       _secao(
                         'Período (anos e trimestres)',
-                        'Selecione um ou mais anos e, se quiser, restrinja a trimestres específicos.',
+                        'Selecione um ou mais anos carregados no ETL e, se quiser, restrinja os trimestres.',
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -402,55 +595,44 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
                             SegmentedPill<String>(
                               value: _granularidade,
                               expand: false,
-                              options: const [('ano', 'Agrupar por ano'), ('trimestre', 'Agrupar por trimestre')],
+                              options: const [('ano', 'Por ano'), ('trimestre', 'Por trimestre')],
                               onChanged: (v) => setState(() => _granularidade = v),
                             ),
                           ],
                         ),
                       ),
                       _secao(
-                        'Seções do relatório',
-                        'Escolha quais visões entram na planilha (no XLSX cada seção vira uma aba).',
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          for (final s in SecaoRelatorio.values)
-                            _chip(s.nome, _secoes.contains(s), () {
-                              setState(() {
-                                if (_secoes.contains(s) && _secoes.length > 1) {
-                                  _secoes = {..._secoes}..remove(s);
-                                } else {
-                                  _secoes = {..._secoes, s};
-                                }
-                              });
-                            }),
-                        ]),
-                      ),
-                      _secao(
-                        'Indicadores incluídos',
-                        'Defina quais colunas financeiras e assistenciais deseja analisar.',
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          for (final m in Metrica.values)
-                            _chip(m.nome, _metricas.contains(m), () {
-                              setState(() {
-                                if (_metricas.contains(m) && _metricas.length > 1) {
-                                  _metricas = {..._metricas}..remove(m);
-                                  if (!_metricas.contains(_ordenarPor)) _ordenarPor = _metricas.first;
-                                } else {
-                                  _metricas = {..._metricas, m};
-                                }
-                              });
-                            }),
+                        'Seções e bases ETL incluídas',
+                        'Combine visões executivas com as tabelas completas extraídas do ETL da ANS.',
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _subgrupo('Visões executivas', SecaoRelatorio.visoesExecutivas),
+                            const SizedBox(height: 14),
+                            _subgrupo('Bases completas do ETL (ANS)', SecaoRelatorio.basesEtl),
+                          ],
+                        ),
+                        trailing: Wrap(spacing: 4, children: [
+                          _atalhoSecoes(
+                            'Só executivo',
+                            () => setState(() => _secoes = Set.of(SecaoRelatorio.visoesExecutivas)),
+                          ),
+                          _atalhoSecoes(
+                            'Todas (8)',
+                            () => setState(() => _secoes = Set.of(SecaoRelatorio.values)),
+                          ),
                         ]),
                       ),
                       if (_secoes.contains(SecaoRelatorio.operadoras))
                         _secao(
-                          'Recorte do ranking de operadoras',
-                          'Ordene pelo indicador principal e limite a quantidade para manter o relatório conciso.',
+                          'Ordenação e limite do ranking de operadoras',
+                          'Defina o indicador principal do ranking e quantas operadoras entram na aba consolidada.',
                           Wrap(spacing: 10, runSpacing: 10, children: [
-                            AppSelect<Metrica>(
+                            AppSelect<OrdemRelatorio>(
                               semanticLabel: 'Ordenar por',
                               icon: LucideIcons.arrowDownWideNarrow,
-                              value: _metricas.contains(_ordenarPor) ? _ordenarPor : _metricas.first,
-                              options: [for (final m in Metrica.values) if (_metricas.contains(m)) (m, 'Por ${m.nome}')],
+                              value: _ordenarPor,
+                              options: [for (final o in OrdemRelatorio.values) (o, 'Por ${o.nome}')],
                               onChanged: (v) => setState(() => _ordenarPor = v),
                             ),
                             AppSelect<int>(
@@ -458,9 +640,10 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
                               icon: LucideIcons.listOrdered,
                               value: _limite ?? 0,
                               options: const [
-                                (10, 'Top 10 operadoras'),
-                                (25, 'Top 25 operadoras'),
-                                (50, 'Top 50 operadoras'),
+                                (10, 'Top 10'),
+                                (25, 'Top 25'),
+                                (50, 'Top 50'),
+                                (100, 'Top 100'),
                                 (0, 'Todas do recorte'),
                               ],
                               onChanged: (v) => setState(() => _limite = v == 0 ? null : v),
@@ -468,8 +651,8 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
                           ]),
                         ),
                       _secao(
-                        'Filtros opcionais',
-                        'Deixe em branco para incluir toda a base extraída do período.',
+                        'Filtros avançados',
+                        'Deixe em branco para exportar toda a base extraída do período selecionado.',
                         Wrap(spacing: 10, runSpacing: 10, children: [
                           AppMultiSelect<String>(
                             semanticLabel: 'UFs do relatório',
@@ -492,6 +675,15 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
                               onChanged: (v) => setState(() => _modalidades = v),
                             ),
                           ),
+                          AppMultiSelect<String>(
+                            semanticLabel: 'Porte ANS das operadoras',
+                            icon: LucideIcons.building2,
+                            selected: _portes,
+                            emptyLabel: 'Todos os portes',
+                            options: [for (final e in rotulosPorte.entries) (e.key, e.value)],
+                            formatSelected: (l) => l.length == 1 ? l.first.$2 : '${l.length} portes',
+                            onChanged: (v) => setState(() => _portes = v),
+                          ),
                           if (_facetas.status.length > 1)
                             AppMultiSelect<String>(
                               semanticLabel: 'Status das operadoras',
@@ -502,6 +694,15 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
                               formatSelected: (l) => l.map((e) => e.$2).join(', '),
                               onChanged: (v) => setState(() => _statuses = v),
                             ),
+                          AppMultiSelect<String>(
+                            semanticLabel: 'Consolidação dos lotes ETL',
+                            icon: LucideIcons.shieldCheck,
+                            selected: _consolidacoes,
+                            emptyLabel: 'Todos os lotes',
+                            options: [for (final e in rotulosConsolidacao.entries) (e.key, e.value)],
+                            formatSelected: (l) => l.length == 1 ? l.first.$2 : 'Todos os lotes',
+                            onChanged: (v) => setState(() => _consolidacoes = v),
+                          ),
                         ]),
                       ),
                     ],
@@ -515,13 +716,18 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
             padding: const EdgeInsets.all(16),
             child: Row(children: [
               AppButton('Cancelar', variant: ButtonVariant.ghost, onPressed: () => Navigator.of(context).pop()),
-              const Spacer(),
-              AppButton(
-                _formato == 'XLSX' ? 'Exportar planilha' : 'Exportar $_formato',
-                icon: LucideIcons.fileSpreadsheet,
-                loading: _gerando,
-                loadingLabel: 'Gerando...',
-                onPressed: podeGerar ? _gerar : null,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: AppButton(
+                    _formato == 'XLSX' ? 'Exportar planilha' : 'Exportar $_formato',
+                    icon: LucideIcons.fileSpreadsheet,
+                    loading: _gerando,
+                    loadingLabel: 'Gerando...',
+                    onPressed: podeGerar ? _gerar : null,
+                  ),
+                ),
               ),
             ]),
           ),

@@ -197,6 +197,14 @@ class ExplorarViewModel extends ChangeNotifier {
   /// Consulta pontual usada pelo construtor de relatório personalizado (sem alterar a tela Explorar).
   Future<ExplorarModel> consultarRelatorio(Map<String, String> consulta) => _repository.explorar(consulta);
 
+  /// Solicita à API a exportação binária robusta (XLSX com openpyxl ou CSV UTF-8 BOM) das bases ETL.
+  Future<({Uint8List bytes, String? filename})> exportarRelatorioBytes(Map<String, dynamic> payload) =>
+      _repository.exportarRelatorioBytes(payload);
+
+  /// Solicita à API as tabelas estruturadas das bases ETL em JSON para composição de PDF.
+  Future<Map<String, dynamic>> exportarRelatorioJson(Map<String, dynamic> payload) =>
+      _repository.exportarRelatorioJson(payload);
+
   Future<void> aplicar(FiltrosExplorar novos) async {
     // Intervalo invertido é corrigido na hora, antes de consultar.
     if (novos.modo == ModoPeriodo.intervalo &&

@@ -69,14 +69,92 @@ class ApiClient {
     return _send(() => _httpClient.get(_buildUri(path, query), headers: _headers()));
   }
 
-  Future<dynamic> post(String path, {Map<String, dynamic>? body}) async {
+  Future<dynamic> post(
+    String path, {
+    Map<String, dynamic>? body,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     return _send(
       () => _httpClient.post(
         _buildUri(path),
         headers: _headers(),
         body: jsonEncode(body ?? <String, dynamic>{}),
       ),
+      timeout: timeout,
     );
+  }
+
+  /// POST que devolve arquivo binário (ex.: planilha XLSX ou CSV gerada pela API).
+  Future<({Uint8List bytes, String? filename})> postBytes(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final http.Response response;
+    try {
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+        if (_authToken != null && _authToken!.isNotEmpty) 'Authorization': 'Bearer $_authToken',
+      };
+      response = await _httpClient
+          .post(
+            _buildUri(path),
+            headers: headers,
+            body: jsonEncode(body ?? <String, dynamic>{}),
+          )
+          .timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      throw const ApiException(statusCode: 0, message: mensagemTempoEsgotado);
+    } catch (e) {
+      debugPrint('[ApiClient] Falha de rede (postBytes): $e');
+      throw const ApiException(statusCode: 0, message: mensagemSemConexao);
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return (
+        bytes: response.bodyBytes,
+        filename: extrairNomeArquivo(response.headers['content-disposition']),
+      );
+    }
+
+    if (response.statusCode == 401) {
+      onUnauthorized?.call();
+    }
+
+    dynamic decoded;
+    if (response.bodyBytes.isNotEmpty) {
+      try {
+        decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        decoded = null;
+      }
+    }
+    final mensagemApi = decoded is Map<String, dynamic> ? (decoded['erro'] ?? decoded['mensagem']) : null;
+    if (mensagemApi == null) {
+      debugPrint('[ApiClient] HTTP ${response.statusCode} sem mensagem da API em ${response.request?.url}');
+    }
+    throw ApiException(
+      statusCode: response.statusCode,
+      message: mensagemApi?.toString() ?? mensagemPorStatus(response.statusCode),
+      details: decoded is Map<String, dynamic> && decoded['detalhes'] is Map<String, dynamic>
+          ? decoded['detalhes'] as Map<String, dynamic>
+          : null,
+    );
+  }
+
+  /// Extrai o nome de arquivo do cabeçalho HTTP `Content-Disposition`.
+  static String? extrairNomeArquivo(String? contentDisposition) {
+    if (contentDisposition == null || contentDisposition.isEmpty) return null;
+    final utf8Match = RegExp(r"filename\*=UTF-8''([^;\r\n]+)", caseSensitive: false).firstMatch(contentDisposition);
+    if (utf8Match != null) {
+      try {
+        return Uri.decodeComponent(utf8Match.group(1)!.trim());
+      } catch (_) {}
+    }
+    final quoted = RegExp(r'filename="([^"]+)"', caseSensitive: false).firstMatch(contentDisposition);
+    if (quoted != null) return quoted.group(1)!.trim();
+    final plain = RegExp(r'filename=([^;\r\n]+)', caseSensitive: false).firstMatch(contentDisposition);
+    return plain?.group(1)?.trim();
   }
 
   Future<dynamic> put(String path, {Map<String, dynamic>? body}) async {
@@ -115,10 +193,13 @@ class ApiClient {
     return _send(() => _httpClient.delete(_buildUri(path, query), headers: _headers()));
   }
 
-  Future<dynamic> _send(Future<http.Response> Function() requestFn) async {
+  Future<dynamic> _send(
+    Future<http.Response> Function() requestFn, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     final http.Response response;
     try {
-      response = await requestFn().timeout(const Duration(seconds: 30));
+      response = await requestFn().timeout(timeout);
     } on TimeoutException {
       throw const ApiException(statusCode: 0, message: mensagemTempoEsgotado);
     } catch (e) {
