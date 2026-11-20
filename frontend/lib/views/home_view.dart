@@ -28,7 +28,9 @@ class HomeView extends StatelessWidget {
       body: SafeArea(
         child: SingleChildScrollView(
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height),
+            // minWidth infinito força a coluna a ocupar toda a largura (o Scaffold afrouxa a restrição),
+            // mantendo o conteúdo centralizado em vez de colado à esquerda.
+            constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height, minWidth: double.infinity),
             child: Column(
               children: [
                 Padding(
@@ -95,9 +97,15 @@ class HomeView extends StatelessWidget {
                         'Começar agora',
                         size: ButtonSize.lg,
                         iconRight: LucideIcons.arrowRight,
-                        onPressed: () => context.go('/login'),
+                        onPressed: () => context.go('/cadastro'),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => context.go('/login'),
+                        child: Text('Já tenho conta · Entrar',
+                            style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
+                      ),
+                      const SizedBox(height: 4),
                       Text('Acesso para administradores e analistas.',
                           style: AppText.sans(12, color: AppColors.muted)),
                       const SizedBox(height: 80),
