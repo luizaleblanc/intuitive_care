@@ -34,8 +34,18 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body style="margin:0;background:#FFFFFF;">
+  <script>
+    (function () {
+      try {
+        var salvo = localStorage.getItem('flutter.intuitive_care_theme');
+        if (salvo && salvo.indexOf('escuro') !== -1) {
+          document.body.style.background = '#0B1210';
+        }
+      } catch (_) {}
+    })();
+  </script>
   <div id="carregando" role="status" aria-label="Carregando" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;">
-    <div style="width:36px;height:36px;border:3px solid #DCE7E2;border-top-color:#113E32;border-radius:50%;animation:girar .8s linear infinite;"></div>
+    <div style="width:36px;height:36px;border:3px solid #DCE7E2;border-top-color:#4AD295;border-radius:50%;animation:girar .8s linear infinite;"></div>
     <style>@keyframes girar{to{transform:rotate(360deg)}}</style>
   </div>
   <script>

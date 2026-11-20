@@ -472,6 +472,10 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         self.assertAlmostEqual(painel_multi["admin"]["total_despesas"], 210.0)
         self.assertAlmostEqual(painel_multi["colaborador"]["despesas_mh"], 210.0)
 
+        # Trimestre padrão sem ano deve selecionar apenas o ano mais recente com aquele trimestre.
+        painel_tri = self.client.get("/api/painel?trimestre=1", headers=admin).get_json()
+        self.assertEqual(painel_tri["periodos_selecionados"], [{"ano": 2026, "trimestre": 1}])
+
         contas_multi = self.client.get("/api/contas?ano=2026&trimestre=1,2&grupo=41,46", headers=admin).get_json()
         self.assertEqual(len(contas_multi["periodos_selecionados"]), 2)
         self.assertAlmostEqual(contas_multi["kpis"]["41"]["valor_atual"], 210.0)
@@ -490,7 +494,7 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
                 "data_nascimento": "1994-03-12",
                 "foto": "data:image/png;base64,iVBORw0KGgo=",
                 "preferencias": {
-                    "tema": "sistema",
+                    "tema": "escuro",
                     "formato_exportacao": "PDF",
                     "resumo_semanal": False,
                     "alerta_novos_dados": False,
@@ -506,8 +510,12 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         self.assertEqual(u["preferencias"]["formato_exportacao"], "CSV")
         self.assertTrue(u["preferencias"]["resumo_semanal"])
         self.assertTrue(u["preferencias"]["alerta_novos_dados"])
-        self.assertEqual(u["preferencias"]["tema"], "sistema")
+        self.assertEqual(u["preferencias"]["tema"], "escuro")
         self.assertEqual(u["preferencias"]["idioma"], "pt-BR")
+
+        # Tema "sistema" não é mais aceito: apenas "claro" e "escuro".
+        tema_invalido = self.client.put("/api/auth/me", json={"preferencias": {"tema": "sistema"}}, headers=h)
+        self.assertEqual(tema_invalido.status_code, 400)
 
         admin = self._auth_headers(self._login("admin@intuitivecare.com.br", "Admin@2025"))
         res_admin = self.client.put(

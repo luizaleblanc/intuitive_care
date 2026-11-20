@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:intuitive_care_app/app/router.dart';
+import 'package:intuitive_care_app/app/theme.dart';
 import 'package:intuitive_care_app/repositories/auth_repository.dart';
 import 'package:intuitive_care_app/services/api_client.dart';
 import 'package:intuitive_care_app/services/auth_service.dart';
@@ -202,6 +203,138 @@ void main() {
     expect(find.text('Exportar planilha'), findsOneWidget);
     expect(find.text('Resumo semanal por e-mail'), findsNothing);
     expect(find.text('Avisar quando houver novos dados da ANS'), findsNothing);
+    expect(find.text('Sistema'), findsNothing);
+    expect(find.text('Claro'), findsOneWidget);
+    expect(find.text('Escuro'), findsOneWidget);
+  });
+
+  testWidgets('Tema oferece apenas Claro e Escuro e aplica dark mode imediatamente em toda a aplicação',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      AppColors.isDark = false;
+      tester.view.reset();
+    });
+
+    final salvos = <Map<String, dynamic>>[];
+    final client = ApiClient(
+      httpClient: MockClient((req) async {
+        if (req.url.path.endsWith('/auth/me') && req.method == 'PUT') {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          salvos.add(body);
+          final prefs = Map<String, dynamic>.from((body['preferencias'] as Map?) ?? {});
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'usuario': {
+                'id': 1,
+                'nome': body['nome'] ?? 'Luiza Ferraz',
+                'email': body['email'] ?? 'luiza@x.com',
+                'perfil': 'COLABORADOR',
+                'permissoes': ['painel.ver', 'perfil.editar_proprio'],
+                'preferencias': {'tema': prefs['tema'] ?? 'claro'},
+              },
+            })),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'token': 'jwt',
+            'usuario': {
+              'id': 1,
+              'nome': 'Luiza Ferraz',
+              'email': 'luiza@x.com',
+              'perfil': 'COLABORADOR',
+              'permissoes': ['painel.ver', 'perfil.editar_proprio'],
+              'preferencias': {'tema': 'claro'},
+            },
+          })),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final auth = AuthViewModel(
+      AuthRepository(apiClient: client, authService: AuthService(client), storageService: _SessaoMemoria()),
+    );
+    await auth.login(email: 'luiza@x.com', senha: '123');
+    final theme = ThemeController(inicial: 'claro');
+    final toast = ToastController();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: auth),
+          ChangeNotifierProvider.value(value: theme),
+          ChangeNotifierProvider.value(value: toast),
+        ],
+        child: AnimatedBuilder(
+          animation: theme,
+          builder: (_, _) {
+            AppColors.isDark = theme.isDark;
+            return MaterialApp(
+              theme: buildAppTheme(dark: false),
+              darkTheme: buildAppTheme(dark: true),
+              themeMode: theme.themeMode,
+              themeAnimationDuration: Duration.zero,
+              home: const Scaffold(body: SingleChildScrollView(child: PerfilView())),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+
+    expect(find.text('Sistema'), findsNothing);
+    expect(theme.isDark, isFalse);
+    expect(AppColors.isDark, isFalse);
+    expect(AppColors.surface, const Color(0xFFF2F4F3));
+
+    await tester.tap(find.text('Escuro'));
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+
+    expect(theme.isDark, isTrue);
+    expect(AppColors.isDark, isTrue);
+    expect(AppColors.surface, const Color(0xFF0B1210));
+    expect(AppColors.card, const Color(0xFF121E1A));
+    expect(salvos, isNotEmpty);
+    expect((salvos.last['preferencias'] as Map)['tema'], 'escuro');
+
+    // Home e Login também renderizam em dark mode sem overflow.
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: auth,
+        child: MaterialApp(
+          theme: buildAppTheme(dark: false),
+          darkTheme: buildAppTheme(dark: true),
+          themeMode: ThemeMode.dark,
+          home: const HomeView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+    expect(find.text('Começar agora'), findsOneWidget);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: auth,
+        child: MaterialApp(
+          theme: buildAppTheme(dark: false),
+          darkTheme: buildAppTheme(dark: true),
+          themeMode: ThemeMode.dark,
+          home: const LoginView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    ignorarFontes(tester);
+    expect(find.text('Entrar'), findsWidgets);
   });
 }
 

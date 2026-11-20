@@ -52,13 +52,16 @@ class _PainelViewState extends State<PainelView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = context.read<AuthViewModel>().currentUser;
       final vm = context.read<PainelViewModel>();
-      if (user != null && !user.isAdmin) {
+      if (user != null) {
         vm.aplicarPreferencias(
           ufPadrao: user.preferencias.ufPadrao,
           trimestrePadrao: user.preferencias.trimestrePadrao,
+          isAdmin: user.isAdmin,
         );
-        final ops = context.read<OperadorasViewModel>();
-        if (ops.resumo.ufs.isEmpty) ops.carregar(resumo: true);
+        if (!user.isAdmin) {
+          final ops = context.read<OperadorasViewModel>();
+          if (ops.resumo.ufs.isEmpty) ops.carregar(resumo: true);
+        }
       }
       vm.carregar();
       context.read<ShellActions>().registrarExportacao(_exportar);
@@ -136,6 +139,7 @@ class _PainelViewState extends State<PainelView> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final isAdmin =
         context.watch<AuthViewModel>().currentUser?.isAdmin ?? false;
     final vm = context.watch<PainelViewModel>();
@@ -301,6 +305,7 @@ class _DonutModalidades extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     final top = p.modalidades.take(4).toList();
     final resto = p.modalidades.skip(4).fold<double>(0, (s, m) => s + m.pct);
     final fatias = [
@@ -318,18 +323,18 @@ class _DonutModalidades extends StatelessWidget {
           CardHeader(
             'Distribuição por modalidade',
             size: 15,
-            color: AppColors.forest,
+            color: AppColors.sageText,
             trailing: Container(
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: dark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.6),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 LucideIcons.chartPie,
                 size: 15,
-                color: AppColors.forest,
+                color: AppColors.sageText,
               ),
             ),
           ),
@@ -337,7 +342,7 @@ class _DonutModalidades extends StatelessWidget {
             'Participação nas despesas do trimestre',
             style: AppText.sans(
               12,
-              color: AppColors.forest.withValues(alpha: 0.75),
+              color: AppColors.sageMuted,
             ),
           ),
           const SizedBox(height: 16),
@@ -361,7 +366,7 @@ class _DonutModalidades extends StatelessWidget {
                       color: f.color,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppColors.forest.withValues(alpha: 0.2),
+                        color: AppColors.sageText.withValues(alpha: 0.2),
                       ),
                     ),
                   ),
@@ -370,7 +375,7 @@ class _DonutModalidades extends StatelessWidget {
                     child: Text(
                       f.label,
                       overflow: TextOverflow.ellipsis,
-                      style: AppText.sans(14, color: AppColors.forest),
+                      style: AppText.sans(14, color: AppColors.sageText),
                     ),
                   ),
                   Text(
@@ -378,7 +383,7 @@ class _DonutModalidades extends StatelessWidget {
                     style: AppText.sans(
                       14,
                       weight: FontWeight.w600,
-                      color: AppColors.forest,
+                      color: AppColors.sageText,
                     ),
                   ),
                 ],
@@ -478,7 +483,7 @@ class _PainelColaborador extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Icon(LucideIcons.lock, size: 13, color: AppColors.muted),
+              Icon(LucideIcons.lock, size: 13, color: AppColors.muted),
               const SizedBox(width: 8),
               Text(
                 'Modo consulta · somente leitura',
@@ -629,7 +634,7 @@ class _Ranking extends StatelessWidget {
                               style: AppText.sans(
                                 14,
                                 weight: FontWeight.w600,
-                                color: AppColors.forest,
+                                color: AppColors.brandText,
                               ),
                             ),
                           ],

@@ -131,6 +131,23 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  /// Persiste apenas a troca de tema sem bloquear o formulário de perfil.
+  Future<bool> updateTheme(String tema) async {
+    final normalizado = tema == 'escuro' ? 'escuro' : 'claro';
+    try {
+      _currentUser = await _repository.updateProfile({
+        'preferencias': {'tema': normalizado},
+      });
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> requestPasswordRecovery({required String email}) async {
     _isLoading = true;
     _errorMessage = null;

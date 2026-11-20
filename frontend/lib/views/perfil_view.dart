@@ -11,6 +11,7 @@ import '../models/user_model.dart';
 import '../shared/ui/ui.dart';
 import '../shared/utils/formatters.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/painel_viewmodel.dart';
 import 'app_shell.dart';
 import 'relatorio_drawer.dart';
 
@@ -51,8 +52,36 @@ class _PerfilViewState extends State<PerfilView> {
     _telefone.text = u.telefone ?? '';
     _nascimento.text = (u.dataNascimento ?? '').split('T').first;
     _foto = u.foto;
-    _prefs = u.preferencias;
+    _prefs = u.preferencias.copyWith(tema: ThemeController.normalizarTema(u.preferencias.tema));
     _erro = null;
+  }
+
+  ThemeController? _themeController() {
+    try {
+      return context.read<ThemeController>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  PainelViewModel? _painelVm() {
+    try {
+      return context.read<PainelViewModel>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  Future<void> _alterarTema(String novoTema) async {
+    final normalizado = ThemeController.normalizarTema(novoTema);
+    setState(() => _prefs = _prefs.copyWith(tema: normalizado));
+    _themeController()?.aplicar(normalizado, persistir: true);
+    final ok = await context.read<AuthViewModel>().updateTheme(normalizado);
+    if (!mounted || ok) return;
+    final msg = context.read<AuthViewModel>().errorMessage;
+    if (msg != null && msg.isNotEmpty) {
+      setState(() => _erro = msg);
+    }
   }
 
   @override
@@ -103,11 +132,14 @@ class _PerfilViewState extends State<PerfilView> {
   Future<void> _salvar() async {
     final vm = context.read<AuthViewModel>();
     final toast = context.read<ToastController>();
-    final u = vm.currentUser;
-    final prefsJson = Map<String, dynamic>.from(_prefs.toJson())
+    final antes = vm.currentUser;
+    final ufAnterior = antes?.preferencias.ufPadrao;
+    final triAnterior = antes?.preferencias.trimestrePadrao;
+    final temaNormalizado = ThemeController.normalizarTema(_prefs.tema);
+    final prefsJson = Map<String, dynamic>.from(_prefs.copyWith(tema: temaNormalizado).toJson())
       ..remove('resumo_semanal')
       ..remove('alerta_novos_dados');
-    if (u != null && !u.pode('dados.exportar')) {
+    if (antes != null && !antes.pode('dados.exportar')) {
       prefsJson.remove('formato_exportacao');
     }
     setState(() => _erro = null);
@@ -122,6 +154,20 @@ class _PerfilViewState extends State<PerfilView> {
     });
     if (!mounted) return;
     if (ok) {
+      final atualizado = vm.currentUser;
+      if (atualizado != null) {
+        _themeController()?.aplicar(atualizado.preferencias.tema, persistir: true);
+        if (atualizado.preferencias.ufPadrao != ufAnterior ||
+            atualizado.preferencias.trimestrePadrao != triAnterior) {
+          _painelVm()?.aplicarPreferencias(
+            ufPadrao: atualizado.preferencias.ufPadrao,
+            trimestrePadrao: atualizado.preferencias.trimestrePadrao,
+            isAdmin: atualizado.isAdmin,
+            forcar: true,
+          );
+        }
+        setState(_carregarDoUsuario);
+      }
       toast.show('Perfil atualizado');
     } else {
       setState(() => _erro = vm.errorMessage);
@@ -135,6 +181,7 @@ class _PerfilViewState extends State<PerfilView> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final vm = context.watch<AuthViewModel>();
     final u = vm.currentUser;
     if (u == null) return const SizedBox.shrink();
@@ -171,6 +218,7 @@ class _PerfilViewState extends State<PerfilView> {
                       variant: ButtonVariant.secondary,
                       onPressed: () {
                         setState(_carregarDoUsuario);
+                        _themeController()?.aplicar(u.preferencias.tema, persistir: true);
                         context.read<ToastController>().show('Alterações descartadas');
                       }),
                   const SizedBox(width: 8),
@@ -196,7 +244,7 @@ class _PerfilViewState extends State<PerfilView> {
               child: Stack(
                 clipBehavior: Clip.hardEdge,
                 children: [
-                  Container(color: AppColors.forest),
+                  Container(color: AppColors.heroBg),
                   Positioned(
                     right: -40,
                     top: -40,
@@ -224,7 +272,7 @@ class _PerfilViewState extends State<PerfilView> {
                           Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(28),
-                              border: Border.all(color: Colors.white, width: 4),
+                              border: Border.all(color: AppColors.card, width: 4),
                             ),
                             child: Avatar(
                               nome: _nome.text.isEmpty ? u.nome : _nome.text,
@@ -241,12 +289,12 @@ class _PerfilViewState extends State<PerfilView> {
                             child: Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 4),
+                                border: Border.all(color: AppColors.card, width: 4),
                               ),
                               child: AppIconButton(
                                 icon: LucideIcons.camera,
                                 label: 'Alterar foto (JPG ou PNG, até 2 MB)',
-                                background: AppColors.forest,
+                                background: AppColors.primaryBg,
                                 foreground: Colors.white,
                                 onPressed: _escolherFoto,
                               ),
@@ -288,9 +336,9 @@ class _PerfilViewState extends State<PerfilView> {
             const SizedBox(height: 12),
             InfoRow('Membro desde', fmtMesAno(u.membroDesde)),
             const SizedBox(height: 8),
-            InfoRow('Último acesso', fmtData(u.ultimoAcesso, formato: u.preferencias.formatoData, hora: true)),
+            InfoRow('Último acesso', fmtData(u.ultimoAcesso, formato: _prefs.formatoData, hora: true)),
             const SizedBox(height: 20),
-            const Divider(height: 1, color: AppColors.slate100),
+            Divider(height: 1, color: AppColors.slate100),
             const SizedBox(height: 20),
             Align(
               alignment: Alignment.centerLeft,
@@ -403,9 +451,9 @@ class _PerfilViewState extends State<PerfilView> {
     final tema = campo(
       'Tema',
       SegmentedPill<String>(
-        value: _prefs.tema,
-        options: const [('claro', 'Claro'), ('escuro', 'Escuro'), ('sistema', 'Sistema')],
-        onChanged: (v) => setState(() => _prefs = _prefs.copyWith(tema: v)),
+        value: ThemeController.normalizarTema(_prefs.tema),
+        options: const [('claro', 'Claro'), ('escuro', 'Escuro')],
+        onChanged: _alterarTema,
       ),
     );
 
@@ -442,12 +490,12 @@ class _PerfilViewState extends State<PerfilView> {
               Expanded(child: trimestrePadrao),
             ]),
             const SizedBox(height: 20),
-            const Divider(height: 1, color: AppColors.slate100),
+            Divider(height: 1, color: AppColors.slate100),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.sage.withValues(alpha: 0.45),
+                color: AppColors.isDark ? AppColors.sage : AppColors.sage.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -456,7 +504,7 @@ class _PerfilViewState extends State<PerfilView> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: AppColors.forest,
+                      color: AppColors.primaryBg,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(LucideIcons.fileSpreadsheet, size: 18, color: AppColors.mint),
@@ -467,11 +515,11 @@ class _PerfilViewState extends State<PerfilView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Relatório personalizado (planilha)',
-                            style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.forest)),
+                            style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.sageText)),
                         const SizedBox(height: 2),
                         Text(
                           'Monte e exporte um relatório conciso com os dados extraídos da ANS por período, seções, métricas e filtros.',
-                          style: AppText.sans(12, color: AppColors.forest.withValues(alpha: 0.78)),
+                          style: AppText.sans(12, color: AppColors.sageMuted),
                         ),
                       ],
                     ),

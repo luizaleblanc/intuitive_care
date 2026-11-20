@@ -47,13 +47,14 @@ class _AppButtonState extends State<AppButton> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final enabled = widget.onPressed != null && !widget.loading;
     final (bg, bgHover, fg, border, borderHover) = switch (widget.variant) {
-      ButtonVariant.primary => (AppColors.forest, AppColors.forestHover, Colors.white, null, null),
+      ButtonVariant.primary => (AppColors.primaryBg, AppColors.primaryHover, Colors.white, null, null),
       ButtonVariant.accent => (AppColors.mint, AppColors.mintHover, AppColors.forest, null, null),
-      ButtonVariant.secondary => (Colors.white, const Color(0xFFF8FAFC), AppColors.ink, AppColors.slate200, AppColors.slate300),
+      ButtonVariant.secondary => (AppColors.card, AppColors.cardHover, AppColors.ink, AppColors.slate200, AppColors.slate300),
       ButtonVariant.ghost => (Colors.transparent, AppColors.slate100, AppColors.ink, null, null),
-      ButtonVariant.danger => (Colors.white, AppColors.red50, AppColors.danger, AppColors.red200, AppColors.red200),
+      ButtonVariant.danger => (AppColors.card, AppColors.red50, AppColors.danger, AppColors.red200, AppColors.red200),
       ButtonVariant.dangerSolid => (AppColors.danger, AppColors.red600, Colors.white, null, null),
     };
     final (height, padH, fontSize, iconSize, gap) = switch (widget.size) {
@@ -137,7 +138,7 @@ class AppIconButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final Color background;
-  final Color foreground;
+  final Color? foreground;
   final double size;
 
   const AppIconButton({
@@ -146,12 +147,14 @@ class AppIconButton extends StatelessWidget {
     required this.label,
     this.onPressed,
     this.background = Colors.transparent,
-    this.foreground = AppColors.muted,
+    this.foreground,
     this.size = 36,
   });
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    final fg = foreground ?? AppColors.muted;
     return Tooltip(
       message: label,
       child: Semantics(
@@ -163,7 +166,7 @@ class AppIconButton extends StatelessWidget {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onPressed,
-            child: SizedBox(width: size, height: size, child: Icon(icon, size: size * 0.45, color: foreground)),
+            child: SizedBox(width: size, height: size, child: Icon(icon, size: size * 0.45, color: fg)),
           ),
         ),
       ),
@@ -173,8 +176,8 @@ class AppIconButton extends StatelessWidget {
 
 class Spinner extends StatefulWidget {
   final double size;
-  final Color color;
-  const Spinner({super.key, this.size = 16, this.color = AppColors.forest});
+  final Color? color;
+  const Spinner({super.key, this.size = 16, this.color});
 
   @override
   State<Spinner> createState() => _SpinnerState();
@@ -190,10 +193,13 @@ class _SpinnerState extends State<Spinner> with SingleTickerProviderStateMixin {
   }
 
   @override
-  Widget build(BuildContext context) => RotationTransition(
-        turns: _c,
-        child: Icon(LucideIcons.loaderCircle, size: widget.size, color: widget.color),
-      );
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return RotationTransition(
+      turns: _c,
+      child: Icon(LucideIcons.loaderCircle, size: widget.size, color: widget.color ?? AppColors.brandText),
+    );
+  }
 }
 
 // ============================================================================
@@ -214,15 +220,16 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     final (bg, fg) = switch (tone) {
       PillTone.neutral => (AppColors.slate100, AppColors.slate700),
-      PillTone.forest => (AppColors.forest, Colors.white),
-      PillTone.mint => (AppColors.mint.withValues(alpha: 0.2), AppColors.forest),
+      PillTone.forest => (AppColors.primaryBg, Colors.white),
+      PillTone.mint => (AppColors.mint.withValues(alpha: dark ? 0.18 : 0.2), AppColors.brandText),
       PillTone.lime => (AppColors.lime, AppColors.forest),
       PillTone.ok => (AppColors.emerald50, AppColors.emerald700),
       PillTone.danger => (AppColors.red50, AppColors.red600),
       PillTone.warn => (AppColors.amber50, AppColors.amber700),
-      PillTone.sage => (AppColors.sage, AppColors.forest),
+      PillTone.sage => (AppColors.sage, AppColors.sageText),
     };
     final color = foreground ?? fg;
     return Container(
@@ -299,7 +306,7 @@ class ModalidadePill extends StatelessWidget {
 class AppCard extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  final Color color;
+  final Color? color;
   final VoidCallback? onTap;
   final bool clip;
 
@@ -307,7 +314,7 @@ class AppCard extends StatefulWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(24),
-    this.color = Colors.white,
+    this.color,
     this.onTap,
     this.clip = false,
   });
@@ -321,6 +328,8 @@ class _AppCardState extends State<AppCard> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
+    final bg = widget.color ?? AppColors.card;
     final clickable = widget.onTap != null;
     final lifted = clickable && _hover;
     final card = AnimatedContainer(
@@ -328,9 +337,10 @@ class _AppCardState extends State<AppCard> {
       transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
       clipBehavior: widget.clip ? Clip.antiAlias : Clip.none,
       decoration: BoxDecoration(
-        color: widget.color,
+        color: bg,
         borderRadius: BorderRadius.circular(AppLayout.cardRadius),
-        boxShadow: widget.color == AppColors.sage ? null : (lifted ? AppShadows.lift : AppShadows.card),
+        border: dark && bg == AppColors.card ? Border.all(color: AppColors.cardBorder) : null,
+        boxShadow: bg == AppColors.sage ? null : (lifted ? AppShadows.lift : AppShadows.card),
       ),
       padding: widget.padding,
       child: widget.child,
@@ -349,33 +359,37 @@ class CardHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
-  final Color color;
+  final Color? color;
   final double size;
 
-  const CardHeader(this.title,
-      {super.key, this.subtitle, this.trailing, this.color = AppColors.ink, this.size = 17});
+  const CardHeader(this.title, {super.key, this.subtitle, this.trailing, this.color, this.size = 17});
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppText.display(size, weight: FontWeight.w700, color: color)),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle!,
-                      style: AppText.sans(size >= 17 ? 14 : 12,
-                          color: color == AppColors.forest ? AppColors.forest.withValues(alpha: 0.7) : AppColors.muted)),
-                ],
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    final c = color ?? AppColors.ink;
+    final onSage = c == AppColors.forest || c == AppColors.sageText;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppText.display(size, weight: FontWeight.w700, color: c)),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(subtitle!,
+                    style: AppText.sans(size >= 17 ? 14 : 12,
+                        color: onSage ? AppColors.sageMuted : AppColors.muted)),
               ],
-            ),
+            ],
           ),
-          ?trailing,
-        ],
-      );
+        ),
+        ?trailing,
+      ],
+    );
+  }
 }
 
 // ============================================================================
@@ -401,11 +415,15 @@ class KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkTheme = AppColors.watchDark(context);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: dark ? AppColors.forest : Colors.white,
+        color: dark ? AppColors.heroBg : AppColors.card,
         borderRadius: BorderRadius.circular(AppLayout.cardRadius),
+        border: !dark && isDarkTheme
+            ? Border.all(color: AppColors.cardBorder)
+            : (dark && isDarkTheme ? Border.all(color: AppColors.mint.withValues(alpha: 0.18)) : null),
         boxShadow: dark ? AppShadows.lift : AppShadows.card,
       ),
       child: Stack(
@@ -432,7 +450,7 @@ class KpiCard extends StatelessWidget {
                       child: Text(label,
                           style: AppText.sans(14,
                               weight: FontWeight.w500,
-                              color: dark ? Colors.white.withValues(alpha: 0.7) : AppColors.muted)),
+                              color: dark ? Colors.white.withValues(alpha: 0.72) : AppColors.muted)),
                     ),
                     const SizedBox(width: 8),
                     Container(
@@ -442,7 +460,7 @@ class KpiCard extends StatelessWidget {
                         color: dark ? Colors.white.withValues(alpha: 0.1) : AppColors.sage,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(icon, size: 17, color: dark ? AppColors.mint : AppColors.forest),
+                      child: Icon(icon, size: 17, color: dark ? AppColors.mint : AppColors.sageText),
                     ),
                   ],
                 ),
@@ -452,9 +470,7 @@ class KpiCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    style: dark
-                        ? AppText.heroValue()
-                        : AppText.display(28, weight: FontWeight.w700),
+                    style: dark ? AppText.heroValue() : AppText.display(28, weight: FontWeight.w700),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -465,7 +481,7 @@ class KpiCard extends StatelessWidget {
                       child: Text(foot,
                           overflow: TextOverflow.ellipsis,
                           style: AppText.sans(12,
-                              color: dark ? Colors.white.withValues(alpha: 0.6) : AppColors.muted)),
+                              color: dark ? Colors.white.withValues(alpha: 0.65) : AppColors.muted)),
                     ),
                   ],
                 ),
@@ -495,7 +511,7 @@ InputDecoration pillInputDecoration({
     hintStyle: AppText.sans(14, color: AppColors.muted.withValues(alpha: 0.8)),
     isDense: true,
     filled: true,
-    fillColor: Colors.white,
+    fillColor: AppColors.inputFill,
     contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: (height - 20) / 2),
     prefixIcon: icon == null ? null : Icon(icon, size: 16, color: AppColors.muted),
     prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 20),
@@ -520,26 +536,29 @@ class _FocusHaloState extends State<FocusHalo> {
   bool _focused = false;
 
   @override
-  Widget build(BuildContext context) => Focus(
-        canRequestFocus: false,
-        skipTraversal: true,
-        onFocusChange: (f) => setState(() => _focused = f),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: _focused
-                ? [
-                    BoxShadow(
-                      color: (widget.error ? AppColors.red200 : AppColors.mint).withValues(alpha: widget.error ? 0.6 : 0.2),
-                      spreadRadius: 4,
-                    ),
-                  ]
-                : null,
-          ),
-          child: widget.child,
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (f) => setState(() => _focused = f),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: _focused
+              ? [
+                  BoxShadow(
+                    color: (widget.error ? AppColors.red200 : AppColors.mint).withValues(alpha: widget.error ? 0.6 : 0.2),
+                    spreadRadius: 4,
+                  ),
+                ]
+              : null,
         ),
-      );
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 class SearchInput extends StatefulWidget {
@@ -584,23 +603,26 @@ class _SearchInputState extends State<SearchInput> {
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: widget.width,
-        height: 40,
-        child: FocusHalo(
-          child: TextField(
-            controller: _controller,
-            style: AppText.sans(14),
-            textInputAction: TextInputAction.search,
-            onChanged: (v) {
-              _timer?.cancel();
-              _timer = Timer(widget.debounce, () => widget.onChanged(v));
-            },
-            onSubmitted: widget.onSubmitted,
-            decoration: pillInputDecoration(hint: widget.placeholder, icon: LucideIcons.search),
-          ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return SizedBox(
+      width: widget.width,
+      height: 40,
+      child: FocusHalo(
+        child: TextField(
+          controller: _controller,
+          style: AppText.sans(14),
+          textInputAction: TextInputAction.search,
+          onChanged: (v) {
+            _timer?.cancel();
+            _timer = Timer(widget.debounce, () => widget.onChanged(v));
+          },
+          onSubmitted: widget.onSubmitted,
+          decoration: pillInputDecoration(hint: widget.placeholder, icon: LucideIcons.search),
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// Campo de texto pill com rótulo associado (formulários).
@@ -611,20 +633,23 @@ class LabeledField extends StatelessWidget {
   const LabeledField({super.key, required this.label, required this.child, this.trailing});
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text(label, style: AppText.sans(14, weight: FontWeight.w600))),
-              ?trailing,
-            ],
-          ),
-          const SizedBox(height: 6),
-          child,
-        ],
-      );
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(label, style: AppText.sans(14, weight: FontWeight.w600))),
+            ?trailing,
+          ],
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
 }
 
 class PillTextField extends StatelessWidget {
@@ -662,25 +687,28 @@ class PillTextField extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        height: height,
-        child: FocusHalo(
-          error: error,
-          child: TextField(
-            controller: controller,
-            obscureText: obscure,
-            keyboardType: keyboardType,
-            inputFormatters: inputFormatters,
-            onSubmitted: onSubmitted,
-            autofillHints: autofillHints,
-            readOnly: readOnly,
-            onTap: onTap,
-            style: AppText.sans(14),
-            decoration: pillInputDecoration(hint: hint, icon: icon, suffix: suffix, error: error, height: height)
-                .copyWith(labelText: null, semanticCounterText: label),
-          ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return SizedBox(
+      height: height,
+      child: FocusHalo(
+        error: error,
+        child: TextField(
+          controller: controller,
+          obscureText: obscure,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          onSubmitted: onSubmitted,
+          autofillHints: autofillHints,
+          readOnly: readOnly,
+          onTap: onTap,
+          style: AppText.sans(14),
+          decoration: pillInputDecoration(hint: hint, icon: icon, suffix: suffix, error: error, height: height)
+              .copyWith(labelText: null, semanticCounterText: label),
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// Select com múltipla escolha em pílula: abre menu ancorado com caixas de seleção
@@ -730,148 +758,159 @@ class AppMultiSelect<T> extends StatelessWidget {
     final menuWidth = (width ?? tamanho.width).clamp(240.0, 340.0);
     final left = origem.dx.clamp(12.0, (tela.width - menuWidth - 12.0).clamp(12.0, double.infinity));
     final espacoAbaixo = tela.height - (origem.dy + tamanho.height) - 16.0;
-    final maxH = espacoAbaixo >= 220 ? espacoAbaixo.clamp(220.0, 380.0) : 340.0;
+    final maxH = espacoAbaixo >= 220 ? espacoAbaixo.clamp(220.0, 440.0) : 380.0;
     final top = espacoAbaixo >= 220
         ? origem.dy + tamanho.height + 6.0
         : (origem.dy - maxH - 6.0).clamp(12.0, tela.height - 120.0);
 
     final rascunho = Set<T>.from(selected);
-    await showDialog<void>(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (_, setModalState) {
-          void alternar(T valor) {
-            setModalState(() {
-              if (rascunho.contains(valor)) {
-                if (rascunho.length > minSelected) rascunho.remove(valor);
-              } else {
-                rascunho.add(valor);
-              }
-            });
-          }
+    final scrollCtrl = ScrollController();
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierColor: Colors.transparent,
+        builder: (dialogCtx) => StatefulBuilder(
+          builder: (ctx, setModalState) {
+            AppColors.watchDark(ctx);
+            void alternar(T valor) {
+              setModalState(() {
+                if (rascunho.contains(valor)) {
+                  if (rascunho.length > minSelected) rascunho.remove(valor);
+                } else {
+                  rascunho.add(valor);
+                }
+              });
+            }
 
-          final todosMarcados = options.isNotEmpty && options.every((o) => rascunho.contains(o.$1));
-          return Stack(
-            children: [
-              Positioned(
-                left: left,
-                top: top,
-                width: menuWidth,
-                child: Material(
-                  color: Colors.white,
-                  elevation: 8,
-                  shadowColor: Colors.black.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(16),
-                  clipBehavior: Clip.antiAlias,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.slate200),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    constraints: BoxConstraints(maxHeight: maxH),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Flexible(
-                          child: ListView(
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            children: [
-                              for (final o in options)
-                                InkWell(
-                                  onTap: () => alternar(o.$1),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                                    child: Row(
-                                      children: [
-                                        AnimatedContainer(
-                                          duration: const Duration(milliseconds: 120),
-                                          width: 18,
-                                          height: 18,
-                                          decoration: BoxDecoration(
-                                            color: rascunho.contains(o.$1) ? AppColors.forest : Colors.white,
-                                            borderRadius: BorderRadius.circular(5),
-                                            border: Border.all(
-                                              color: rascunho.contains(o.$1) ? AppColors.forest : AppColors.slate300,
-                                              width: 1.5,
+            final todosMarcados = options.isNotEmpty && options.every((o) => rascunho.contains(o.$1));
+            return Stack(
+              children: [
+                Positioned(
+                  left: left,
+                  top: top,
+                  width: menuWidth,
+                  child: Material(
+                    color: AppColors.card,
+                    elevation: 8,
+                    shadowColor: Colors.black.withValues(alpha: AppColors.isDark ? 0.45 : 0.16),
+                    borderRadius: BorderRadius.circular(16),
+                    clipBehavior: Clip.antiAlias,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.slate200),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      constraints: BoxConstraints(maxHeight: maxH),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Flexible(
+                            child: Scrollbar(
+                              controller: scrollCtrl,
+                              thumbVisibility: options.length > 8,
+                              child: ListView(
+                                controller: scrollCtrl,
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                children: [
+                                  for (final o in options)
+                                    InkWell(
+                                      onTap: () => alternar(o.$1),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                                        child: Row(
+                                          children: [
+                                            AnimatedContainer(
+                                              duration: const Duration(milliseconds: 120),
+                                              width: 18,
+                                              height: 18,
+                                              decoration: BoxDecoration(
+                                                color: rascunho.contains(o.$1) ? AppColors.primaryBg : AppColors.inputFill,
+                                                borderRadius: BorderRadius.circular(5),
+                                                border: Border.all(
+                                                  color: rascunho.contains(o.$1) ? AppColors.primaryBg : AppColors.slate300,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: rascunho.contains(o.$1)
+                                                  ? const Icon(LucideIcons.check, size: 12, color: Colors.white)
+                                                  : null,
                                             ),
-                                          ),
-                                          child: rascunho.contains(o.$1)
-                                              ? const Icon(LucideIcons.check, size: 12, color: Colors.white)
-                                              : null,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            o.$2,
-                                            style: AppText.sans(
-                                              14,
-                                              weight: rascunho.contains(o.$1) ? FontWeight.w600 : FontWeight.w400,
-                                              color: rascunho.contains(o.$1) ? AppColors.forest : AppColors.ink,
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                o.$2,
+                                                style: AppText.sans(
+                                                  14,
+                                                  weight: rascunho.contains(o.$1) ? FontWeight.w600 : FontWeight.w400,
+                                                  color: rascunho.contains(o.$1) ? AppColors.brandText : AppColors.ink,
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.slate100))),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          child: Row(
-                            children: [
-                              if (minSelected == 0)
-                                TextButton(
-                                  onPressed: rascunho.isEmpty ? null : () => setModalState(rascunho.clear),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: Text('Limpar',
-                                      style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.muted)),
-                                )
-                              else
-                                TextButton(
-                                  onPressed: todosMarcados
-                                      ? null
-                                      : () => setModalState(() {
-                                            for (final o in options) {
-                                              rascunho.add(o.$1);
-                                            }
-                                          }),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: Text('Todos',
-                                      style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.muted)),
-                                ),
-                              const Spacer(),
-                              AppButton(
-                                'Aplicar',
-                                size: ButtonSize.sm,
-                                onPressed: () => Navigator.of(dialogCtx).pop(),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
+                          Container(
+                            decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.slate100))),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            child: Row(
+                              children: [
+                                if (minSelected == 0)
+                                  TextButton(
+                                    onPressed: rascunho.isEmpty ? null : () => setModalState(rascunho.clear),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text('Limpar',
+                                        style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.muted)),
+                                  )
+                                else
+                                  TextButton(
+                                    onPressed: todosMarcados
+                                        ? null
+                                        : () => setModalState(() {
+                                              for (final o in options) {
+                                                rascunho.add(o.$1);
+                                              }
+                                            }),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text('Todos',
+                                        style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.muted)),
+                                  ),
+                                const Spacer(),
+                                AppButton(
+                                  'Aplicar',
+                                  size: ButtonSize.sm,
+                                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      scrollCtrl.dispose();
+    }
     if (!_igual(rascunho, selected)) {
       onChanged(Set<T>.unmodifiable(rascunho));
     }
@@ -879,6 +918,7 @@ class AppMultiSelect<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     final rotulo = _rotulo;
     final filtrado = minSelected == 0 && selected.isNotEmpty;
     return Semantics(
@@ -891,7 +931,7 @@ class AppMultiSelect<T> extends StatelessWidget {
           width: width,
           height: 40,
           child: Material(
-            color: filtrado ? AppColors.sage.withValues(alpha: 0.45) : Colors.white,
+            color: filtrado ? (dark ? AppColors.sage : AppColors.sage.withValues(alpha: 0.45)) : AppColors.inputFill,
             borderRadius: BorderRadius.circular(999),
             child: InkWell(
               onTap: () => _abrir(context),
@@ -900,12 +940,12 @@ class AppMultiSelect<T> extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 12, right: 12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: filtrado ? AppColors.forest.withValues(alpha: 0.4) : AppColors.slate200),
+                  border: Border.all(color: filtrado ? AppColors.brandText.withValues(alpha: 0.5) : AppColors.slate200),
                 ),
                 child: Row(
                   mainAxisSize: width == null ? MainAxisSize.min : MainAxisSize.max,
                   children: [
-                    Icon(icon, size: 14, color: filtrado ? AppColors.forest : AppColors.muted),
+                    Icon(icon, size: 14, color: filtrado ? AppColors.brandText : AppColors.muted),
                     const SizedBox(width: 8),
                     Flexible(
                       fit: width == null ? FlexFit.loose : FlexFit.tight,
@@ -915,12 +955,12 @@ class AppMultiSelect<T> extends StatelessWidget {
                         style: AppText.sans(
                           14,
                           weight: filtrado ? FontWeight.w600 : FontWeight.w500,
-                          color: filtrado ? AppColors.forest : AppColors.ink,
+                          color: filtrado ? AppColors.brandText : AppColors.ink,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Icon(LucideIcons.chevronDown, size: 14, color: filtrado ? AppColors.forest : AppColors.muted),
+                    Icon(LucideIcons.chevronDown, size: 14, color: filtrado ? AppColors.brandText : AppColors.muted),
                   ],
                 ),
               ),
@@ -953,6 +993,7 @@ class AppSelect<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final selected = options.where((o) => o.$1 == value).map((o) => o.$2).firstOrNull ?? '';
     return Semantics(
       label: semanticLabel,
@@ -966,9 +1007,12 @@ class AppSelect<T> extends StatelessWidget {
           initialValue: value,
           onSelected: onChanged,
           position: PopupMenuPosition.under,
-          constraints: BoxConstraints(minWidth: width ?? 200, maxHeight: 360),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          color: Colors.white,
+          constraints: BoxConstraints(minWidth: width ?? 200, maxHeight: 420),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: AppColors.slate200),
+          ),
+          color: AppColors.card,
           elevation: 6,
           itemBuilder: (_) => [
             for (final o in options)
@@ -981,9 +1025,9 @@ class AppSelect<T> extends StatelessWidget {
                       child: Text(o.$2,
                           style: AppText.sans(14,
                               weight: o.$1 == value ? FontWeight.w600 : FontWeight.w400,
-                              color: o.$1 == value ? AppColors.forest : AppColors.ink)),
+                              color: o.$1 == value ? AppColors.brandText : AppColors.ink)),
                     ),
-                    if (o.$1 == value) const Icon(LucideIcons.check, size: 14, color: AppColors.forest),
+                    if (o.$1 == value) Icon(LucideIcons.check, size: 14, color: AppColors.brandText),
                   ],
                 ),
               ),
@@ -991,7 +1035,7 @@ class AppSelect<T> extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.only(left: 12, right: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.inputFill,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(color: AppColors.slate200),
             ),
@@ -1007,7 +1051,7 @@ class AppSelect<T> extends StatelessWidget {
                       style: AppText.sans(14, weight: FontWeight.w500)),
                 ),
                 const SizedBox(width: 8),
-                const Icon(LucideIcons.chevronDown, size: 14, color: AppColors.muted),
+                Icon(LucideIcons.chevronDown, size: 14, color: AppColors.muted),
               ],
             ),
           ),
@@ -1029,56 +1073,59 @@ class ToggleRow extends StatelessWidget {
   const ToggleRow({super.key, required this.on, required this.onChanged, required this.label, required this.desc});
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        toggled: on,
-        label: label,
-        child: InkWell(
-          onTap: () => onChanged(!on),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label, style: AppText.sans(14, weight: FontWeight.w600)),
-                      Text(desc, style: AppText.sans(12, color: AppColors.muted)),
-                    ],
-                  ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Semantics(
+      toggled: on,
+      label: label,
+      child: InkWell(
+        onTap: () => onChanged(!on),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: AppText.sans(14, weight: FontWeight.w600)),
+                    Text(desc, style: AppText.sans(12, color: AppColors.muted)),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                AnimatedContainer(
+              ),
+              const SizedBox(width: 16),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 44,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: on ? AppColors.primaryBg : AppColors.slate200,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: AnimatedAlign(
                   duration: const Duration(milliseconds: 150),
-                  width: 44,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: on ? AppColors.forest : AppColors.slate200,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: AnimatedAlign(
-                    duration: const Duration(milliseconds: 150),
-                    alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.all(2),
-                      width: 20,
-                      height: 20,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 2, offset: Offset(0, 1))],
-                      ),
+                  alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.all(2),
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 2, offset: Offset(0, 1))],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
-/// Controle segmentado (Tema: Claro / Escuro / Sistema ou modos de período).
+/// Controle segmentado (Tema: Claro / Escuro ou modos de período).
 class SegmentedPill<T> extends StatelessWidget {
   final T value;
   final List<(T, String)> options;
@@ -1094,6 +1141,7 @@ class SegmentedPill<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     Widget item((T, String) o) {
       final child = Semantics(
         selected: o.$1 == value,
@@ -1108,7 +1156,7 @@ class SegmentedPill<T> extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: o.$1 == value ? AppColors.forest : Colors.transparent,
+                color: o.$1 == value ? AppColors.primaryBg : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
@@ -1129,7 +1177,11 @@ class SegmentedPill<T> extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: dark ? Border.all(color: AppColors.slate200) : null,
+      ),
       child: Row(
         mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
         children: [for (final o in options) item(o)],
@@ -1147,21 +1199,25 @@ class ErrorBox extends StatelessWidget {
   const ErrorBox(this.message, {super.key, this.onRetry});
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        liveRegion: true,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(12)),
-          child: Row(
-            children: [
-              const Icon(LucideIcons.circleAlert, size: 15, color: AppColors.red700),
-              const SizedBox(width: 8),
-              Expanded(child: Text(message, style: AppText.sans(14, color: AppColors.red700))),
-              if (onRetry != null) AppButton('Tentar novamente', size: ButtonSize.sm, variant: ButtonVariant.secondary, onPressed: onRetry),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          children: [
+            Icon(LucideIcons.circleAlert, size: 15, color: AppColors.red700),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: AppText.sans(14, color: AppColors.red700))),
+            if (onRetry != null)
+              AppButton('Tentar novamente', size: ButtonSize.sm, variant: ButtonVariant.secondary, onPressed: onRetry),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class LoadingBlock extends StatelessWidget {
@@ -1170,19 +1226,22 @@ class LoadingBlock extends StatelessWidget {
   const LoadingBlock({super.key, this.label = 'Carregando...', this.height = 240});
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        height: height,
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Spinner(size: 18),
-              const SizedBox(width: 10),
-              Text(label, style: AppText.sans(14, color: AppColors.muted)),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return SizedBox(
+      height: height,
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Spinner(size: 18),
+            const SizedBox(width: 10),
+            Text(label, style: AppText.sans(14, color: AppColors.muted)),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// Toast centralizado embaixo, some em 2,2s (seção 8).
@@ -1218,79 +1277,83 @@ class ToastOverlay extends StatelessWidget {
   const ToastOverlay({super.key, required this.controller, required this.child});
 
   @override
-  Widget build(BuildContext context) => Stack(
-        children: [
-          child,
-          ListenableBuilder(
-            listenable: controller,
-            builder: (context, _) {
-              final msg = controller.message;
-              return Positioned(
-                left: 0,
-                right: 0,
-                bottom: 24,
-                child: IgnorePointer(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    transitionBuilder: (c, a) => FadeTransition(
-                      opacity: a,
-                      child: SlideTransition(
-                        position: Tween(begin: const Offset(0, 0.3), end: Offset.zero).animate(a),
-                        child: c,
-                      ),
+  Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
+    return Stack(
+      children: [
+        child,
+        ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) {
+            final msg = controller.message;
+            return Positioned(
+              left: 0,
+              right: 0,
+              bottom: 24,
+              child: IgnorePointer(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (c, a) => FadeTransition(
+                    opacity: a,
+                    child: SlideTransition(
+                      position: Tween(begin: const Offset(0, 0.3), end: Offset.zero).animate(a),
+                      child: c,
                     ),
-                    child: msg == null
-                        ? const SizedBox.shrink()
-                        : Center(
-                            key: ValueKey(msg),
-                            child: Semantics(
-                              liveRegion: true,
-                              child: Material(
-                                color: Colors.transparent,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.ink,
-                                    borderRadius: BorderRadius.circular(999),
-                                    boxShadow: AppShadows.lift,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(controller.isError ? LucideIcons.circleAlert : LucideIcons.circleCheck,
-                                          size: 16, color: controller.isError ? AppColors.red300 : AppColors.mint),
-                                      const SizedBox(width: 8),
-                                      Text(msg,
-                                          style: AppText.sans(14, weight: FontWeight.w500, color: Colors.white)),
-                                    ],
-                                  ),
+                  ),
+                  child: msg == null
+                      ? const SizedBox.shrink()
+                      : Center(
+                          key: ValueKey(msg),
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.toastBg,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: dark ? Border.all(color: AppColors.slate200) : null,
+                                  boxShadow: AppShadows.lift,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(controller.isError ? LucideIcons.circleAlert : LucideIcons.circleCheck,
+                                        size: 16, color: controller.isError ? AppColors.red300 : AppColors.mint),
+                                    const SizedBox(width: 8),
+                                    Text(msg, style: AppText.sans(14, weight: FontWeight.w500, color: Colors.white)),
+                                  ],
                                 ),
                               ),
                             ),
                           ),
-                  ),
+                        ),
                 ),
-              );
-            },
-          ),
-        ],
-      );
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
 }
 
 // ============================================================================
 // Drawer lateral (480px)
 // ============================================================================
 Future<T?> showSideDrawer<T>(BuildContext context, {required WidgetBuilder builder, double width = 480}) {
+  final dark = AppColors.watchDark(context);
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Fechar',
-    barrierColor: AppColors.ink.withValues(alpha: 0.3),
+    barrierColor: Colors.black.withValues(alpha: dark ? 0.6 : 0.3),
     transitionDuration: const Duration(milliseconds: 250),
     pageBuilder: (ctx, _, _) => Align(
       alignment: Alignment.centerRight,
       child: Material(
-        color: Colors.white,
+        color: AppColors.card,
         elevation: 24,
         child: SizedBox(width: width, height: double.infinity, child: builder(ctx)),
       ),
@@ -1315,11 +1378,14 @@ class InfoRow extends StatelessWidget {
   const InfoRow(this.label, this.value, {super.key});
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: AppText.sans(14, color: AppColors.muted)),
-          Text(value, style: AppText.sans(14, weight: FontWeight.w700)),
-        ],
-      );
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppText.sans(14, color: AppColors.muted)),
+        Text(value, style: AppText.sans(14, weight: FontWeight.w700)),
+      ],
+    );
+  }
 }

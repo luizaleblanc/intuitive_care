@@ -53,12 +53,24 @@ class PainelViewModel extends ChangeNotifier {
       ..sort();
   }
 
-  /// Aplica UF e trimestre padrão das preferências do usuário (apenas uma vez por sessão).
-  void aplicarPreferencias({String? ufPadrao, int? trimestrePadrao}) {
-    if (_preferenciasAplicadas) return;
+  /// Aplica UF e trimestre padrão das preferências do usuário.
+  /// Com [forcar] = true, reaplica imediatamente após o usuário salvar novas preferências.
+  void aplicarPreferencias({
+    String? ufPadrao,
+    int? trimestrePadrao,
+    bool isAdmin = false,
+    bool forcar = false,
+  }) {
+    if (_preferenciasAplicadas && !forcar) return;
     _preferenciasAplicadas = true;
-    _ufs = (ufPadrao ?? '').isEmpty ? {} : {ufPadrao!};
+    _ufs = (isAdmin || (ufPadrao ?? '').isEmpty) ? {} : {ufPadrao!};
     _trimestres = trimestrePadrao == null ? {} : {trimestrePadrao};
+    if (forcar) {
+      _anos = {};
+      _painel = null;
+      _error = null;
+      notifyListeners();
+    }
   }
 
   void reset() {

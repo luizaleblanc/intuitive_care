@@ -18,10 +18,11 @@ class AuthLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final largura = MediaQuery.sizeOf(context).width;
     final desktop = largura >= 1024;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.pageBg,
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -36,7 +37,7 @@ class AuthLayout extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
                         onPressed: () => context.go('/login'),
-                        icon: const Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
+                        icon: Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
                         label: Text('Voltar ao login',
                             style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
                       ),
@@ -152,9 +153,11 @@ class PainelForest extends StatelessWidget {
   const PainelForest({super.key});
 
   @override
-  Widget build(BuildContext context) => Container(
-        clipBehavior: Clip.hardEdge,
-        decoration: const BoxDecoration(color: AppColors.forest),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Container(
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(color: AppColors.heroBg),
         child: Stack(
           children: [
             Positioned(
@@ -205,4 +208,5 @@ class PainelForest extends StatelessWidget {
           ],
         ),
       );
+  }
 }

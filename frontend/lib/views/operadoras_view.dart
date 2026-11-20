@@ -77,6 +77,7 @@ class _OperadorasViewState extends State<OperadorasView> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final vm = context.watch<OperadorasViewModel>();
     final isAdmin = context.watch<AuthViewModel>().currentUser?.isAdmin ?? false;
     final r = vm.resumo;
@@ -103,7 +104,7 @@ class _OperadorasViewState extends State<OperadorasView> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(color: AppColors.sage, borderRadius: BorderRadius.circular(16)),
-                        child: Icon(cards[i].$3, size: 19, color: AppColors.forest),
+                        child: Icon(cards[i].$3, size: 19, color: AppColors.sageText),
                       ),
                       const SizedBox(width: 16),
                       Column(
@@ -169,7 +170,7 @@ class _OperadorasViewState extends State<OperadorasView> {
               _Tabela(itens: vm.items, isAdmin: isAdmin, loading: vm.isLoading, busca: vm.search, onTap: _abrir),
               if (vm.totalPages > 1)
                 Container(
-                  decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.slate100))),
+                  decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.slate100))),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   child: Row(
                     children: [
@@ -213,6 +214,7 @@ class _Tabela extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     Widget th(String t, int i, {TextAlign align = TextAlign.left}) => Expanded(
           flex: _flex[i],
           child: Text(t.toUpperCase(),
@@ -223,7 +225,7 @@ class _Tabela extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          color: AppColors.forest,
+          color: AppColors.primaryBg,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(children: [
             th('Registro ANS', 0),
@@ -276,6 +278,7 @@ class _LinhaState extends State<_Linha> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final o = widget.op;
     final f = widget.flex;
     return Semantics(
@@ -289,8 +292,8 @@ class _LinhaState extends State<_Linha> {
           onTap: widget.onTap,
           child: Container(
             decoration: BoxDecoration(
-              color: _hover ? AppColors.surface.withValues(alpha: 0.6) : Colors.white,
-              border: const Border(top: BorderSide(color: AppColors.slate100)),
+              color: _hover ? AppColors.cardHover : AppColors.card,
+              border: Border(top: BorderSide(color: AppColors.slate100)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(
@@ -346,10 +349,10 @@ class _LinhaState extends State<_Linha> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(widget.isAdmin ? LucideIcons.pencil : LucideIcons.eye,
-                              size: 13, color: AppColors.forest),
+                              size: 13, color: AppColors.brandText),
                           const SizedBox(width: 4),
                           Text(widget.isAdmin ? 'Gerenciar' : 'Detalhes',
-                              style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.forest)),
+                              style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.brandText)),
                         ],
                       ),
                     ),
@@ -496,7 +499,10 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = context.watch<AuthViewModel>().currentUser?.isAdmin ?? false;
+    AppColors.watchDark(context);
+    final user = context.watch<AuthViewModel>().currentUser;
+    final isAdmin = user?.isAdmin ?? false;
+    final formatoData = user?.preferencias.formatoData ?? 'DD/MM/AAAA';
     final saving = context.watch<OperadorasViewModel>().isSaving;
     final o = _op;
 
@@ -504,7 +510,7 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          color: AppColors.forest,
+          color: AppColors.heroBg,
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,7 +593,7 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
                   const SizedBox(height: 12),
                   _linha(
                       'Descredenciada em',
-                      Text(fmtData(DateTime.tryParse(o.dataDescredenciamento!)),
+                      Text(fmtData(DateTime.tryParse(o.dataDescredenciamento!), formato: formatoData),
                           style: AppText.sans(14, weight: FontWeight.w600))),
                 ],
               ],
@@ -600,7 +606,7 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
                     border: Border.all(color: AppColors.slate200),
                   ),
                   child: Row(children: [
-                    const Icon(LucideIcons.lock, size: 14, color: AppColors.muted),
+                    Icon(LucideIcons.lock, size: 14, color: AppColors.muted),
                     const SizedBox(width: 8),
                     Text('Edição disponível apenas para o perfil Administrador.',
                         style: AppText.sans(12, color: AppColors.caption)),
@@ -611,7 +617,7 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
           ),
         ),
         Container(
-          decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.slate100))),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.slate100))),
           padding: const EdgeInsets.all(20),
           child: Row(
             children: [
@@ -687,12 +693,12 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
                 decoration: InputDecoration(
                   isDense: true,
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppColors.inputFill,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.slate200)),
+                      borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.slate200)),
                   enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.slate200)),
+                      borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.slate200)),
                   focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.mint)),
                 ),
@@ -713,10 +719,9 @@ class _OperadoraDrawerState extends State<_OperadoraDrawer> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label.toUpperCase(),
-                style: AppText.sans(11,
-                    weight: FontWeight.w600, color: AppColors.forest.withValues(alpha: 0.75), spacing: 11 * 0.05)),
+                style: AppText.sans(11, weight: FontWeight.w600, color: AppColors.sageMuted, spacing: 11 * 0.05)),
             const SizedBox(height: 2),
-            Text(valor, style: AppText.display(18, weight: FontWeight.w700, color: AppColors.forest)),
+            Text(valor, style: AppText.display(18, weight: FontWeight.w700, color: AppColors.sageText)),
           ],
         ),
       );

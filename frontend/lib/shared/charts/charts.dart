@@ -11,7 +11,7 @@ class BarDatum {
   const BarDatum(this.label, this.value);
 }
 
-/// Barras em pílula: trilho Sage 70%, barra Mint, última/hover em Forest com tooltip.
+/// Barras em pílula: trilho Sage, barra Mint, última/hover destacada com tooltip.
 class PillBarChart extends StatefulWidget {
   final List<BarDatum> data;
   final double height;
@@ -28,6 +28,7 @@ class _PillBarChartState extends State<PillBarChart> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     if (widget.data.isEmpty) {
       return SizedBox(
         height: widget.height,
@@ -63,10 +64,12 @@ class _PillBarChartState extends State<PillBarChart> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                                color: AppColors.forest, borderRadius: BorderRadius.circular(999)),
+                              color: AppColors.primaryBg,
+                              borderRadius: BorderRadius.circular(999),
+                              border: dark ? Border.all(color: AppColors.mint.withValues(alpha: 0.35)) : null,
+                            ),
                             child: Text('${fmtDec1(d.value)} ${widget.unit}',
-                                maxLines: 1,
-                                style: AppText.numeric(11, color: Colors.white)),
+                                maxLines: 1, style: AppText.numeric(11, color: Colors.white)),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -74,7 +77,7 @@ class _PillBarChartState extends State<PillBarChart> {
                           height: track,
                           constraints: const BoxConstraints(maxWidth: 44),
                           decoration: BoxDecoration(
-                            color: AppColors.sage.withValues(alpha: 0.7),
+                            color: AppColors.sage.withValues(alpha: dark ? 0.95 : 0.7),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           alignment: Alignment.bottomCenter,
@@ -83,7 +86,7 @@ class _PillBarChartState extends State<PillBarChart> {
                             curve: Curves.easeOut,
                             height: h,
                             decoration: BoxDecoration(
-                              color: active ? AppColors.forest : AppColors.mint,
+                              color: active ? (dark ? AppColors.lime : AppColors.forest) : AppColors.mint,
                               borderRadius: BorderRadius.circular(999),
                             ),
                           ),
@@ -128,30 +131,32 @@ class Donut extends StatelessWidget {
   const Donut({super.key, required this.data, this.size = 170, required this.center, required this.sub});
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            CustomPaint(size: Size.square(size), painter: _DonutPainter(data)),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(center, style: AppText.display(24, weight: FontWeight.w700, color: AppColors.forest)),
-                Text(sub,
-                    style: AppText.sans(11,
-                        weight: FontWeight.w500, color: AppColors.forest.withValues(alpha: 0.75))),
-              ],
-            ),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(size: Size.square(size), painter: _DonutPainter(data, dark)),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(center, style: AppText.display(24, weight: FontWeight.w700, color: AppColors.sageText)),
+              Text(sub, style: AppText.sans(11, weight: FontWeight.w500, color: AppColors.sageMuted)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DonutPainter extends CustomPainter {
   final List<DonutSlice> data;
-  _DonutPainter(this.data);
+  final bool dark;
+  _DonutPainter(this.data, this.dark);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -167,7 +172,7 @@ class _DonutPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = stroke
-          ..color = AppColors.forest.withValues(alpha: 0.08));
+          ..color = dark ? Colors.white.withValues(alpha: 0.08) : AppColors.forest.withValues(alpha: 0.08));
 
     final circ = 2 * math.pi * r;
     var acc = 0.0;
@@ -195,32 +200,33 @@ class _DonutPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DonutPainter old) => old.data != data;
+  bool shouldRepaint(covariant _DonutPainter old) => old.data != data || old.dark != dark;
 }
 
 /// Barra de progresso horizontal arredondada.
 class ProgressBar extends StatelessWidget {
   final double fraction;
   final double height;
-  final Color color;
-  final Color track;
-  const ProgressBar(
-      {super.key, required this.fraction, this.height = 8, this.color = AppColors.mint, this.track = AppColors.surface});
+  final Color? color;
+  final Color? track;
+  const ProgressBar({super.key, required this.fraction, this.height = 8, this.color, this.track});
 
   @override
-  Widget build(BuildContext context) => Container(
-        height: height,
-        decoration: BoxDecoration(color: track, borderRadius: BorderRadius.circular(999)),
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          widthFactor: fraction.clamp(0.0, 1.0),
-          child: Container(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999))),
-        ),
-      );
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Container(
+      height: height,
+      decoration: BoxDecoration(color: track ?? AppColors.surface, borderRadius: BorderRadius.circular(999)),
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: fraction.clamp(0.0, 1.0),
+        child: Container(decoration: BoxDecoration(color: color ?? AppColors.mint, borderRadius: BorderRadius.circular(999))),
+      ),
+    );
+  }
 }
 
-
-/// Linha/área de evolução: série principal em Forest com área degradê; comparação em Mint tracejada.
+/// Linha/área de evolução: série principal com área degradê; comparação tracejada.
 class TrendAreaChart extends StatefulWidget {
   final List<BarDatum> data;
   final List<BarDatum> comparacao;
@@ -246,6 +252,7 @@ class _TrendAreaChartState extends State<TrendAreaChart> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     final dados = widget.data;
     if (dados.isEmpty) {
       return SizedBox(
@@ -276,14 +283,18 @@ class _TrendAreaChartState extends State<TrendAreaChart> {
                 children: [
                   CustomPaint(
                     size: Size(largura, widget.height),
-                    painter: _TrendPainter(dados, comp, ativo, widget.unit),
+                    painter: _TrendPainter(dados, comp, ativo, widget.unit, dark),
                   ),
                   Positioned(
                     top: 0,
                     right: 0,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: AppColors.forest, borderRadius: BorderRadius.circular(999)),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBg,
+                        borderRadius: BorderRadius.circular(999),
+                        border: dark ? Border.all(color: AppColors.mint.withValues(alpha: 0.35)) : null,
+                      ),
                       child: Text(
                         '${dados[ativo].label.replaceAll('\n', ' de ')} · ${fmtDec1(dados[ativo].value)} ${widget.unit}'
                         '${ativo < comp.length ? '  |  ${widget.rotuloComparacao}: ${fmtDec1(comp[ativo].value)} ${widget.unit}' : ''}',
@@ -310,7 +321,8 @@ class _TrendPainter extends CustomPainter {
   final List<BarDatum> comp;
   final int ativo;
   final String unit;
-  _TrendPainter(this.dados, this.comp, this.ativo, this.unit);
+  final bool dark;
+  _TrendPainter(this.dados, this.comp, this.ativo, this.unit, this.dark);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -326,6 +338,9 @@ class _TrendPainter extends CustomPainter {
     final largura = size.width - margemEsq;
     double y(double v) => margemSup + altura - (v - minV) / (maxV - minV) * altura;
     double x(int i) => margemEsq + (dados.length == 1 ? largura / 2 : largura * i / (dados.length - 1));
+
+    final linhaCor = dark ? AppColors.mint : AppColors.forest;
+    final compCor = dark ? AppColors.lime : AppColors.mint;
 
     final grade = Paint()
       ..color = AppColors.slate200
@@ -348,7 +363,7 @@ class _TrendPainter extends CustomPainter {
 
     if (comp.isNotEmpty) {
       final tracejado = Paint()
-        ..color = AppColors.mint
+        ..color = compCor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
       for (final m in linha(comp).computeMetrics()) {
@@ -369,24 +384,24 @@ class _TrendPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppColors.forest.withValues(alpha: 0.18), AppColors.forest.withValues(alpha: 0)],
+          colors: [linhaCor.withValues(alpha: dark ? 0.24 : 0.18), linhaCor.withValues(alpha: 0)],
         ).createShader(Rect.fromLTWH(0, margemSup, size.width, altura)),
     );
     canvas.drawPath(
       principal,
       Paint()
-        ..color = AppColors.forest
+        ..color = linhaCor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.5
         ..strokeJoin = StrokeJoin.round,
     );
 
     canvas.drawLine(Offset(x(ativo), margemSup), Offset(x(ativo), margemSup + altura),
-        Paint()..color = AppColors.forest.withValues(alpha: 0.2));
+        Paint()..color = linhaCor.withValues(alpha: 0.25));
     for (var i = 0; i < dados.length; i++) {
       final o = Offset(x(i), y(dados[i].value));
-      canvas.drawCircle(o, i == ativo ? 6 : 3.5, Paint()..color = i == ativo ? AppColors.forest : AppColors.mint);
-      canvas.drawCircle(o, i == ativo ? 3 : 1.5, Paint()..color = Colors.white);
+      canvas.drawCircle(o, i == ativo ? 6 : 3.5, Paint()..color = i == ativo ? linhaCor : compCor);
+      canvas.drawCircle(o, i == ativo ? 3 : 1.5, Paint()..color = AppColors.card);
       // Rótulos espaçados (até ~84px cada) para não se sobreporem.
       final cabem = ((size.width - margemEsq) / 84).floor().clamp(1, dados.length);
       final passo = (dados.length / cabem).ceil();
@@ -410,7 +425,7 @@ class _TrendPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TrendPainter old) =>
-      old.dados != dados || old.comp != comp || old.ativo != ativo || old.unit != unit;
+      old.dados != dados || old.comp != comp || old.ativo != ativo || old.unit != unit || old.dark != dark;
 }
 
 class ItemRanking {
@@ -421,7 +436,7 @@ class ItemRanking {
   const ItemRanking(this.rotulo, this.valor, this.valorFormatado, {this.detalhe});
 }
 
-/// Ranking horizontal: posição, nome, barra (Forest no 1º, Mint nos demais) e valor tabular.
+/// Ranking horizontal: posição, nome, barra destacada no 1º e Mint nos demais, valor tabular.
 class HorizontalRanking extends StatelessWidget {
   final List<ItemRanking> itens;
   final ValueChanged<int>? onTap;
@@ -429,6 +444,7 @@ class HorizontalRanking extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     if (itens.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -470,7 +486,7 @@ class HorizontalRanking extends StatelessWidget {
                     flex: 4,
                     child: ProgressBar(
                       fraction: maxV <= 0 ? 0 : itens[i].valor / maxV,
-                      color: i == 0 ? AppColors.forest : AppColors.mint,
+                      color: i == 0 ? (dark ? AppColors.lime : AppColors.forest) : AppColors.mint,
                       track: AppColors.surface,
                     ),
                   ),

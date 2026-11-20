@@ -74,8 +74,11 @@ def _resolver_periodos(
         ]
         if not selecionados:
             raise BusinessRuleError("Não há dados da ANS para o período selecionado.", 404)
-        # Compatibilidade: ao passar apenas 1 ano sem trimestre, usa todos os trimestres daquele ano
-        # (ou múltiplos anos/trimestres selecionados pelo usuário).
+        # Se apenas trimestre(s) foram informados sem ano (ex.: trimestre_padrao do perfil),
+        # restringe ao ano mais recente que possui dados para esse recorte.
+        if not anos_set:
+            ano_recente = selecionados[0][0]
+            selecionados = [p for p in selecionados if p[0] == ano_recente]
 
     if len(selecionados) == 1:
         anteriores = [_anterior(selecionados[0])]

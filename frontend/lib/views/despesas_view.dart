@@ -83,8 +83,11 @@ class _DespesasViewState extends State<DespesasView> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final vm = context.watch<ContasViewModel>();
-    final isAdmin = context.watch<AuthViewModel>().currentUser?.isAdmin ?? false;
+    final user = context.watch<AuthViewModel>().currentUser;
+    final isAdmin = user?.isAdmin ?? false;
+    final formatoData = user?.preferencias.formatoData ?? 'DD/MM/AAAA';
     final c = vm.contas;
     if (c == null) {
       if (vm.error != null) return ErrorBox(vm.error!, onRetry: () => vm.carregar());
@@ -156,7 +159,7 @@ class _DespesasViewState extends State<DespesasView> {
                     Tooltip(
                       message: c.lote.auditadoPor == null
                           ? 'Lote auditado'
-                          : 'Auditado por ${c.lote.auditadoPor} em ${fmtData(c.lote.auditadoEm, hora: true)}',
+                          : 'Auditado por ${c.lote.auditadoPor} em ${fmtData(c.lote.auditadoEm, formato: formatoData, hora: true)}',
                       child: const Pill('Lote auditado', tone: PillTone.ok, icon: LucideIcons.shieldCheck),
                     )
                   else
@@ -225,6 +228,7 @@ class _TabelaContas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final maxV = c.contas.fold<double>(
         0, (m, l) => math.max(m, math.max(l.valorAtual.abs(), (l.valorAnterior ?? 0).abs())));
     Widget th(String t, int i, {TextAlign align = TextAlign.left}) => Expanded(
@@ -251,7 +255,7 @@ class _TabelaContas extends StatelessWidget {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _legenda(AppColors.forest, 'Atual'),
+                  _legenda(AppColors.brandText, 'Atual'),
                   const SizedBox(width: 16),
                   _legenda(AppColors.mint.withValues(alpha: 0.5), 'Anterior'),
                 ],
@@ -259,7 +263,7 @@ class _TabelaContas extends StatelessWidget {
             ),
           ),
           Container(
-            color: AppColors.forest,
+            color: AppColors.primaryBg,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Row(children: [
               th('Conta', 0),
@@ -304,6 +308,7 @@ class _LinhaContaState extends State<_LinhaConta> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final l = widget.l;
     final f = widget.flex;
     final v = variation(l.valorAtual, l.valorAnterior);
@@ -314,9 +319,9 @@ class _LinhaContaState extends State<_LinhaConta> {
       child: Container(
         decoration: BoxDecoration(
           color: widget.destacada
-              ? AppColors.mint.withValues(alpha: 0.12)
-              : (_hover ? AppColors.surface.withValues(alpha: 0.6) : Colors.white),
-          border: const Border(top: BorderSide(color: AppColors.slate100)),
+              ? AppColors.mint.withValues(alpha: 0.14)
+              : (_hover ? AppColors.cardHover : AppColors.card),
+          border: Border(top: BorderSide(color: AppColors.slate100)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
@@ -350,7 +355,7 @@ class _LinhaContaState extends State<_LinhaConta> {
                 padding: const EdgeInsets.only(right: 16),
                 child: Column(
                   children: [
-                    ProgressBar(fraction: frac(l.valorAtual), height: 6, color: AppColors.forest, track: Colors.transparent),
+                    ProgressBar(fraction: frac(l.valorAtual), height: 6, color: AppColors.brandText, track: Colors.transparent),
                     const SizedBox(height: 4),
                     ProgressBar(
                         fraction: frac(l.valorAnterior),
@@ -394,42 +399,44 @@ class _Composicao extends StatelessWidget {
   const _Composicao(this.itens);
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        color: AppColors.sage,
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Composição médico-hospitalar',
-                style: AppText.display(15, weight: FontWeight.w700, color: AppColors.forest)),
-            Text('Eventos conhecidos por forma de pagamento',
-                style: AppText.sans(12, color: AppColors.forest.withValues(alpha: 0.75))),
-            const SizedBox(height: 20),
-            if (itens.isEmpty) Text('Sem dados no período.', style: AppText.sans(14, color: AppColors.forest)),
-            for (final i in itens.take(6))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(children: [
-                      Expanded(
-                          child: Text(i.forma,
-                              style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.forest))),
-                      Text(fmtPct(i.pct), style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.forest)),
-                    ]),
-                    const SizedBox(height: 6),
-                    ProgressBar(
-                        fraction: i.pct / 100,
-                        height: 10,
-                        color: AppColors.forest,
-                        track: Colors.white.withValues(alpha: 0.6)),
-                  ],
-                ),
+  Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
+    return AppCard(
+      color: AppColors.sage,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Composição médico-hospitalar',
+              style: AppText.display(15, weight: FontWeight.w700, color: AppColors.sageText)),
+          Text('Eventos conhecidos por forma de pagamento', style: AppText.sans(12, color: AppColors.sageMuted)),
+          const SizedBox(height: 20),
+          if (itens.isEmpty) Text('Sem dados no período.', style: AppText.sans(14, color: AppColors.sageText)),
+          for (final i in itens.take(6))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    Expanded(
+                        child: Text(i.forma,
+                            style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.sageText))),
+                    Text(fmtPct(i.pct), style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.sageText)),
+                  ]),
+                  const SizedBox(height: 6),
+                  ProgressBar(
+                      fraction: i.pct / 100,
+                      height: 10,
+                      color: dark ? AppColors.mint : AppColors.forest,
+                      track: dark ? Colors.white.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.6)),
+                ],
               ),
-          ],
-        ),
-      );
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Destaques extends StatelessWidget {
@@ -438,6 +445,7 @@ class _Destaques extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final mh = c.composicao.isEmpty ? null : c.composicao.first;
     final itens = <(IconData, Color, Color, InlineSpan)>[
       for (final d in c.destaques)
@@ -454,7 +462,7 @@ class _Destaques extends StatelessWidget {
         (
           LucideIcons.info,
           AppColors.sage,
-          AppColors.forest,
+          AppColors.sageText,
           TextSpan(children: [
             TextSpan(text: 'Pagamento ${mh.forma.toLowerCase()} ', style: const TextStyle(fontWeight: FontWeight.w700)),
             TextSpan(text: 'segue como ${fmtPct(mh.pct)} dos eventos médico-hospitalares.'),

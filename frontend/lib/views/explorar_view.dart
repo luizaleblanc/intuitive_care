@@ -102,6 +102,7 @@ class _ExplorarViewState extends State<ExplorarView> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final vm = context.watch<ExplorarViewModel>();
     final dados = vm.dados;
     if (dados == null) {
@@ -178,7 +179,7 @@ class _BarraControles extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(LucideIcons.calendarRange, size: 16, color: AppColors.forest),
+            Icon(LucideIcons.calendarRange, size: 16, color: AppColors.brandText),
             const SizedBox(width: 8),
             Text('PERÍODO', style: AppText.eyebrow()),
           ]),
@@ -258,8 +259,8 @@ class _BarraControles extends StatelessWidget {
             onChanged: (tris) => vm.aplicar(f.copyWith(trimestres: tris)),
           ),
         ]),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
           child: Divider(height: 1, color: AppColors.slate100),
         ),
         // Linha 2: visualização, comparação e ferramentas
@@ -314,37 +315,40 @@ class _Interruptor extends StatelessWidget {
   const _Interruptor({required this.ligado, required this.rotulo, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        toggled: ligado,
-        label: rotulo,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: () => onChanged(!ligado),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 36,
-                height: 20,
-                padding: const EdgeInsets.all(2),
-                alignment: ligado ? Alignment.centerRight : Alignment.centerLeft,
-                decoration: BoxDecoration(
-                  color: ligado ? AppColors.forest : AppColors.slate300,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(color: ligado ? AppColors.mint : Colors.white, shape: BoxShape.circle),
-                ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Semantics(
+      toggled: ligado,
+      label: rotulo,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => onChanged(!ligado),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 36,
+              height: 20,
+              padding: const EdgeInsets.all(2),
+              alignment: ligado ? Alignment.centerRight : Alignment.centerLeft,
+              decoration: BoxDecoration(
+                color: ligado ? AppColors.primaryBg : AppColors.slate300,
+                borderRadius: BorderRadius.circular(999),
               ),
-              const SizedBox(width: 8),
-              Text(rotulo, style: AppText.sans(13, weight: FontWeight.w500)),
-            ]),
-          ),
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(color: ligado ? AppColors.mint : Colors.white, shape: BoxShape.circle),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(rotulo, style: AppText.sans(13, weight: FontWeight.w500)),
+          ]),
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +360,7 @@ class _FiltrosAtivos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final f = vm.filtros;
     final pilulas = <(String, FiltrosExplorar)>[
       for (final m in f.modalidades) (m, f.copyWith(modalidades: {...f.modalidades}..remove(m))),
@@ -374,17 +379,17 @@ class _FiltrosAtivos extends StatelessWidget {
       children: [
         for (final (rotulo, sem) in pilulas)
           InputChip(
-            label: Text(rotulo, style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.forest)),
+            label: Text(rotulo, style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.sageText)),
             backgroundColor: AppColors.sage,
             side: BorderSide.none,
             shape: const StadiumBorder(),
-            deleteIcon: const Icon(LucideIcons.x, size: 14, color: AppColors.forest),
+            deleteIcon: Icon(LucideIcons.x, size: 14, color: AppColors.sageText),
             deleteButtonTooltipMessage: 'Remover filtro',
             onDeleted: () => vm.aplicar(sem),
           ),
         TextButton(
           onPressed: () => vm.aplicar(f.semAvancados()),
-          child: Text('Limpar filtros', style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.forest)),
+          child: Text('Limpar filtros', style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.brandText)),
         ),
       ],
     );
@@ -433,11 +438,12 @@ class _GradeGraficos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final graficos = vm.graficos;
     if (graficos.isEmpty) {
       return AppCard(
         child: Column(children: [
-          const Icon(LucideIcons.chartNoAxesCombined, size: 28, color: AppColors.forest),
+          Icon(LucideIcons.chartNoAxesCombined, size: 28, color: AppColors.brandText),
           const SizedBox(height: 8),
           Text('Nenhum gráfico na tela', style: AppText.cardTitle()),
           const SizedBox(height: 4),
@@ -470,10 +476,11 @@ class _CartaoGrafico extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final sage = config.tipo == TipoGrafico.donutSage;
-    final cor = sage ? AppColors.forest : AppColors.ink;
+    final cor = sage ? AppColors.sageText : AppColors.ink;
     return AppCard(
-      color: sage ? AppColors.sage : Colors.white,
+      color: sage ? AppColors.sage : AppColors.card,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -536,7 +543,7 @@ class _CartaoGrafico extends StatelessWidget {
       case TipoGrafico.donutSage:
         final total = dados.porModalidade.fold<double>(0, (s, x) => s + (x.valores.de(m) ?? 0));
         if (total <= 0) {
-          return Text('Sem dados para o recorte.', style: AppText.sans(14, color: AppColors.forest));
+          return Text('Sem dados para o recorte.', style: AppText.sans(14, color: AppColors.sageText));
         }
         final top = dados.porModalidade.take(5).toList();
         final resto = dados.porModalidade.skip(5).fold<double>(0, (s, x) => s + (x.valores.de(m) ?? 0));
@@ -560,9 +567,9 @@ class _CartaoGrafico extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(f.label,
-                              maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.sans(12, color: AppColors.forest)),
+                              maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.sans(12, color: AppColors.sageText)),
                         ),
-                        Text(fmtPct(f.pct), style: AppText.numeric(12, color: AppColors.forest)),
+                        Text(fmtPct(f.pct), style: AppText.numeric(12, color: AppColors.sageText)),
                       ]),
                     ),
                 ],
@@ -621,6 +628,7 @@ class _ListagemState extends State<_Listagem> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final itens = [...widget.dados.operadoras]..sort((a, b) {
         final c = (a.valores.de(_ordem) ?? -1).compareTo(b.valores.de(_ordem) ?? -1);
         return _desc ? -c : c;
@@ -637,7 +645,7 @@ class _ListagemState extends State<_Listagem> {
               children: [
                 Flexible(child: Text(t.toUpperCase(), overflow: TextOverflow.ellipsis, style: AppText.eyebrow())),
                 if (m != null && m == _ordem)
-                  Icon(_desc ? LucideIcons.arrowDown : LucideIcons.arrowUp, size: 12, color: AppColors.forest),
+                  Icon(_desc ? LucideIcons.arrowDown : LucideIcons.arrowUp, size: 12, color: AppColors.brandText),
               ],
             ),
           ),
@@ -665,7 +673,7 @@ class _ListagemState extends State<_Listagem> {
               cabecalho('Benef.', m: Metrica.beneficiarios),
             ]),
           ),
-          const Divider(height: 1, color: AppColors.slate200),
+          Divider(height: 1, color: AppColors.slate200),
           if (pagina.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 32),
@@ -679,7 +687,7 @@ class _ListagemState extends State<_Listagem> {
               onTap: () => context.go('/operadoras?q=${o.registroAns}'),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.slate100))),
+                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.slate100))),
                 child: Row(children: [
                   Expanded(
                     flex: 5,
@@ -755,9 +763,9 @@ class _PainelFiltrosState extends State<_PainelFiltros> {
   Widget _secao(String titulo, String ajuda, Widget conteudo) => Padding(
         padding: const EdgeInsets.only(bottom: 24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(titulo, style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.forest)),
+          Text(titulo, style: AppText.sans(14, weight: FontWeight.w700, color: AppColors.sageText)),
           const SizedBox(height: 2),
-          Text(ajuda, style: AppText.sans(12, color: AppColors.forest.withValues(alpha: 0.7))),
+          Text(ajuda, style: AppText.sans(12, color: AppColors.sageMuted)),
           const SizedBox(height: 10),
           conteudo,
         ]),
@@ -774,6 +782,7 @@ class _PainelFiltrosState extends State<_PainelFiltros> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final fac = widget.facetas;
     return Container(
       color: AppColors.sage,
@@ -783,7 +792,7 @@ class _PainelFiltrosState extends State<_PainelFiltros> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 24, 16, 8),
             child: Row(children: [
-              Expanded(child: Text('Filtros avançados', style: AppText.display(20, color: AppColors.forest))),
+              Expanded(child: Text('Filtros avançados', style: AppText.display(20, color: AppColors.sageText))),
               AppIconButton(icon: LucideIcons.x, label: 'Fechar', onPressed: () => Navigator.of(context).pop()),
             ]),
           ),
@@ -829,7 +838,10 @@ class _PainelFiltrosState extends State<_PainelFiltros> {
             ),
           ),
           Container(
-            color: Colors.white,
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              border: Border(top: BorderSide(color: AppColors.slate200)),
+            ),
             padding: const EdgeInsets.all(16),
             child: Row(children: [
               AppButton('Limpar', variant: ButtonVariant.ghost, onPressed: () => setState(() => _f = _f.semAvancados())),
@@ -855,29 +867,32 @@ class _Chip extends StatelessWidget {
   const _Chip({required this.rotulo, required this.ativo, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        selected: ativo,
-        button: true,
-        child: Material(
-          color: ativo ? AppColors.forest : Colors.white,
-          shape: const StadiumBorder(),
-          child: InkWell(
-            customBorder: const StadiumBorder(),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (ativo) ...[
-                  const Icon(LucideIcons.check, size: 13, color: AppColors.mint),
-                  const SizedBox(width: 6),
-                ],
-                Text(rotulo,
-                    style: AppText.sans(12, weight: FontWeight.w600, color: ativo ? Colors.white : AppColors.forest)),
-              ]),
-            ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Semantics(
+      selected: ativo,
+      button: true,
+      child: Material(
+        color: ativo ? AppColors.primaryBg : AppColors.card,
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (ativo) ...[
+                const Icon(LucideIcons.check, size: 13, color: AppColors.mint),
+                const SizedBox(width: 6),
+              ],
+              Text(rotulo,
+                  style: AppText.sans(12, weight: FontWeight.w600, color: ativo ? Colors.white : AppColors.sageText)),
+            ]),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -938,6 +953,7 @@ class _ConstrutorState extends State<_Construtor> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     return Container(
       color: AppColors.sage,
       child: Column(
@@ -946,26 +962,26 @@ class _ConstrutorState extends State<_Construtor> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 24, 16, 4),
             child: Row(children: [
-              Expanded(child: Text('Personalizar gráficos', style: AppText.display(20, color: AppColors.forest))),
+              Expanded(child: Text('Personalizar gráficos', style: AppText.display(20, color: AppColors.sageText))),
               AppIconButton(icon: LucideIcons.x, label: 'Fechar', onPressed: () => Navigator.of(context).pop()),
             ]),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text('Escolha o tipo de gráfico e a métrica. O layout fica salvo no seu perfil (até 8 gráficos).',
-                style: AppText.sans(13, color: AppColors.forest.withValues(alpha: 0.75))),
+                style: AppText.sans(13, color: AppColors.sageMuted)),
           ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                Text('NA TELA', style: AppText.eyebrow(color: AppColors.forest)),
+                Text('NA TELA', style: AppText.eyebrow(color: AppColors.sageText)),
                 const SizedBox(height: 8),
                 for (var i = 0; i < _lista.length; i++)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Material(
-                      color: _selecionado == i ? Colors.white : Colors.white.withValues(alpha: 0.55),
+                      color: _selecionado == i ? AppColors.card : AppColors.card.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(16),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(16),
@@ -974,10 +990,11 @@ class _ConstrutorState extends State<_Construtor> {
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: _selecionado == i ? AppColors.forest : Colors.transparent, width: 1.5),
+                            border: Border.all(
+                                color: _selecionado == i ? AppColors.brandText : Colors.transparent, width: 1.5),
                           ),
                           child: Row(children: [
-                            Icon(iconeTipo(_lista[i].tipo), size: 18, color: AppColors.forest),
+                            Icon(iconeTipo(_lista[i].tipo), size: 18, color: AppColors.brandText),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text('${_lista[i].metrica.nome} · ${_lista[i].tipo.nome}',
@@ -1026,7 +1043,7 @@ class _ConstrutorState extends State<_Construtor> {
                 ),
                 if (_selecionado != null) ...[
                   const SizedBox(height: 24),
-                  Text('TIPO DE GRÁFICO', style: AppText.eyebrow(color: AppColors.forest)),
+                  Text('TIPO DE GRÁFICO', style: AppText.eyebrow(color: AppColors.sageText)),
                   const SizedBox(height: 8),
                   GridView.count(
                     crossAxisCount: 2,
@@ -1041,7 +1058,7 @@ class _ConstrutorState extends State<_Construtor> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text('MÉTRICA', style: AppText.eyebrow(color: AppColors.forest)),
+                  Text('MÉTRICA', style: AppText.eyebrow(color: AppColors.sageText)),
                   const SizedBox(height: 8),
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     for (final m in Metrica.values)
@@ -1059,14 +1076,17 @@ class _ConstrutorState extends State<_Construtor> {
                   if (_tipo == TipoGrafico.donutSage) ...[
                     const SizedBox(height: 8),
                     Text('Sinistralidade é uma razão e não se soma entre modalidades, por isso não entra na rosca.',
-                        style: AppText.sans(12, color: AppColors.forest.withValues(alpha: 0.75))),
+                        style: AppText.sans(12, color: AppColors.sageMuted)),
                   ],
                 ],
               ],
             ),
           ),
           Container(
-            color: Colors.white,
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              border: Border(top: BorderSide(color: AppColors.slate200)),
+            ),
             padding: const EdgeInsets.all(16),
             child: Row(children: [
               AppButton('Restaurar padrão',
@@ -1094,39 +1114,42 @@ class _OpcaoTipo extends StatelessWidget {
   const _OpcaoTipo({required this.tipo, required this.ativo, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        selected: ativo,
-        button: true,
-        child: Material(
-          color: ativo ? AppColors.forest : Colors.white,
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Semantics(
+      selected: ativo,
+      button: true,
+      child: Material(
+        color: ativo ? AppColors.primaryBg : AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(children: [
-                Icon(iconeTipo(tipo), size: 20, color: ativo ? AppColors.mint : AppColors.forest),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(tipo.nome,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.sans(12, weight: FontWeight.w700, color: ativo ? Colors.white : AppColors.ink)),
-                      Text(tipo.usoIdeal,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.sans(11, color: ativo ? Colors.white70 : AppColors.muted)),
-                    ],
-                  ),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              Icon(iconeTipo(tipo), size: 20, color: ativo ? AppColors.mint : AppColors.brandText),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(tipo.nome,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.sans(12, weight: FontWeight.w700, color: ativo ? Colors.white : AppColors.ink)),
+                    Text(tipo.usoIdeal,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.sans(11, color: ativo ? Colors.white70 : AppColors.muted)),
+                  ],
                 ),
-              ]),
-            ),
+              ),
+            ]),
           ),
         ),
-      );
+      ),
+    );
+  }
 }

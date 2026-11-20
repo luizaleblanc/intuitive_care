@@ -296,9 +296,9 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
   Widget _secao(String titulo, String ajuda, Widget conteudo) => Padding(
         padding: const EdgeInsets.only(bottom: 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(titulo, style: AppText.display(14, weight: FontWeight.w700, color: AppColors.forest)),
+          Text(titulo, style: AppText.display(14, weight: FontWeight.w700, color: AppColors.sageText)),
           const SizedBox(height: 2),
-          Text(ajuda, style: AppText.sans(12, color: AppColors.forest.withValues(alpha: 0.72))),
+          Text(ajuda, style: AppText.sans(12, color: AppColors.sageMuted)),
           const SizedBox(height: 10),
           conteudo,
         ]),
@@ -308,7 +308,7 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
         selected: ativo,
         button: true,
         child: Material(
-          color: ativo ? AppColors.forest : Colors.white,
+          color: ativo ? AppColors.primaryBg : AppColors.card,
           shape: const StadiumBorder(),
           child: InkWell(
             customBorder: const StadiumBorder(),
@@ -321,7 +321,7 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
                   const SizedBox(width: 6),
                 ],
                 Text(rotulo,
-                    style: AppText.sans(12, weight: FontWeight.w600, color: ativo ? Colors.white : AppColors.forest)),
+                    style: AppText.sans(12, weight: FontWeight.w600, color: ativo ? Colors.white : AppColors.sageText)),
               ]),
             ),
           ),
@@ -330,6 +330,7 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final podeGerar = !_carregandoBase && !_gerando && _anos.isNotEmpty && _secoes.isNotEmpty && _metricas.isNotEmpty;
     return Container(
       color: AppColors.sage,
@@ -339,7 +340,7 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 24, 16, 4),
             child: Row(children: [
-              Expanded(child: Text('Exportar relatório personalizado', style: AppText.display(20, color: AppColors.forest))),
+              Expanded(child: Text('Exportar relatório personalizado', style: AppText.display(20, color: AppColors.sageText))),
               AppIconButton(icon: LucideIcons.x, label: 'Fechar', onPressed: () => Navigator.of(context).pop()),
             ]),
           ),
@@ -347,7 +348,7 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(
               'Monte uma planilha concisa com os dados extraídos da ANS escolhendo período, seções, métricas e filtros.',
-              style: AppText.sans(13, color: AppColors.forest.withValues(alpha: 0.78)),
+              style: AppText.sans(13, color: AppColors.sageMuted),
             ),
           ),
           const SizedBox(height: 8),
@@ -507,7 +508,10 @@ class _RelatorioDrawerState extends State<_RelatorioDrawer> {
                   ),
           ),
           Container(
-            color: Colors.white,
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              border: Border(top: BorderSide(color: AppColors.slate200)),
+            ),
             padding: const EdgeInsets.all(16),
             child: Row(children: [
               AppButton('Cancelar', variant: ButtonVariant.ghost, onPressed: () => Navigator.of(context).pop()),

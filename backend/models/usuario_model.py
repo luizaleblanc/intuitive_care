@@ -61,6 +61,7 @@ class Usuario:
                 prefs.update(json.loads(bruto))
             except (TypeError, ValueError):
                 pass
+        prefs["tema"] = "escuro" if prefs.get("tema") == "escuro" else "claro"
         perfil = row.get("perfil") or "COLABORADOR"
         return cls(
             id=row.get("id"),

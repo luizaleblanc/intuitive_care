@@ -52,6 +52,7 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final pagina = _paginas.firstWhere((p) => location.startsWith(p.rota), orElse: () => _paginas.first);
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -97,33 +98,36 @@ class _Sidebar extends StatelessWidget {
   const _Sidebar({required this.ativa});
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: AppLayout.sidebar,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(right: BorderSide(color: AppColors.slate200.withValues(alpha: 0.7))),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 28, 16, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: InkWell(
-                  onTap: () => context.go('/painel'),
-                  child: const FittedBox(fit: BoxFit.scaleDown, child: LogoHorizontal(size: 36)),
-                ),
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Container(
+      width: AppLayout.sidebar,
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border(right: BorderSide(color: AppColors.slate200.withValues(alpha: 0.8))),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 28, 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InkWell(
+                onTap: () => context.go('/painel'),
+                child: const FittedBox(fit: BoxFit.scaleDown, child: LogoHorizontal(size: 36)),
               ),
             ),
-            _grupo('MENU', [
-              for (final p in _paginas.where((p) => p.rota != '/perfil')) _Item(pagina: p, ativa: ativa == p.rota),
-            ]),
-            _grupo('CONTA', [_Item(pagina: _paginas.last, ativa: ativa == _paginas.last.rota)]),
-          ],
-        ),
-      );
+          ),
+          _grupo('MENU', [
+            for (final p in _paginas.where((p) => p.rota != '/perfil')) _Item(pagina: p, ativa: ativa == p.rota),
+          ]),
+          _grupo('CONTA', [_Item(pagina: _paginas.last, ativa: ativa == _paginas.last.rota)]),
+        ],
+      ),
+    );
+  }
 
   Widget _grupo(String rotulo, List<Widget> itens) => Padding(
         padding: const EdgeInsets.only(top: 24),
@@ -154,6 +158,7 @@ class _ItemState extends State<_Item> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final ativa = widget.ativa;
     final cor = ativa ? Colors.white : (_hover ? AppColors.ink : AppColors.slate600);
     return Semantics(
@@ -170,7 +175,7 @@ class _ItemState extends State<_Item> {
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: ativa ? AppColors.forest : (_hover ? AppColors.surface : Colors.transparent),
+              color: ativa ? AppColors.primaryBg : (_hover ? AppColors.surface : Colors.transparent),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -292,42 +297,46 @@ class _UserChipState extends State<_UserChip> {
   bool _hover = false;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: 'Abrir perfil de ${widget.nome}',
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: GestureDetector(
-            onTap: () => context.go('/perfil'),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.fromLTRB(4, 4, 16, 4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: _hover ? AppShadows.lift : AppShadows.card,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Avatar(nome: widget.nome, foto: widget.foto, size: 32),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(widget.nome, style: AppText.sans(14, weight: FontWeight.w600, height: 1.2)),
-                      Text(widget.perfil, style: AppText.sans(11, color: AppColors.caption, height: 1.2)),
-                    ],
-                  ),
-                ],
-              ),
+  Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
+    return Semantics(
+      button: true,
+      label: 'Abrir perfil de ${widget.nome}',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTap: () => context.go('/perfil'),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.fromLTRB(4, 4, 16, 4),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(999),
+              border: dark ? Border.all(color: AppColors.cardBorder) : null,
+              boxShadow: _hover ? AppShadows.lift : AppShadows.card,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Avatar(nome: widget.nome, foto: widget.foto, size: 32),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(widget.nome, style: AppText.sans(14, weight: FontWeight.w600, height: 1.2)),
+                    Text(widget.perfil, style: AppText.sans(11, color: AppColors.caption, height: 1.2)),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// Avatar com foto (data URL) ou iniciais em Mint sobre Forest.

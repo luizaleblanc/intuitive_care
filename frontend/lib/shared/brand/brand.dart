@@ -46,12 +46,13 @@ class LogoHorizontal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final escuro = negative || AppColors.watchDark(context);
     return Semantics(
       label: 'Intuitive Care',
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Mark(size: size, bg: negative ? null : AppColors.forest),
+          Mark(size: size, bg: negative ? null : AppColors.primaryBg),
           const SizedBox(width: 12),
           Column(
             mainAxisSize: MainAxisSize.min,
@@ -59,7 +60,7 @@ class LogoHorizontal extends StatelessWidget {
             children: [
               Text(
                 'intuitivecare',
-                style: AppText.display(22, color: negative ? AppColors.mint : AppColors.forest).copyWith(height: 1),
+                style: AppText.display(22, color: escuro ? AppColors.mint : AppColors.forest).copyWith(height: 1),
               ),
               const SizedBox(height: 4),
               Text(
@@ -71,7 +72,7 @@ class LogoHorizontal extends StatelessWidget {
                   weight: FontWeight.w600,
                   spacing: 9 * 0.06,
                   height: 1,
-                  color: negative ? Colors.white.withValues(alpha: 0.6) : AppColors.muted,
+                  color: escuro ? Colors.white.withValues(alpha: 0.65) : AppColors.muted,
                 ),
               ),
             ],

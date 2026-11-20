@@ -32,7 +32,7 @@ class PreferenciasModel {
       formatoExportacao: (json['formato_exportacao'] ?? 'CSV').toString(),
       ufPadrao: (json['uf_padrao'] as String?)?.isEmpty == true ? null : json['uf_padrao'] as String?,
       trimestrePadrao: (json['trimestre_padrao'] as num?)?.toInt() ?? 4,
-      tema: (json['tema'] ?? 'claro').toString(),
+      tema: (json['tema'] ?? 'claro').toString() == 'escuro' ? 'escuro' : 'claro',
       resumoSemanal: json['resumo_semanal'] != false,
       alertaNovosDados: json['alerta_novos_dados'] != false,
       graficosExplorar: json['graficos_explorar'] is List

@@ -47,7 +47,17 @@ void main() {
       expect(u.preferencias.formatoExportacao, 'PDF');
       expect(u.preferencias.ufPadrao, 'PB');
       expect(u.preferencias.trimestrePadrao, 2);
+      // Valor legado "sistema" é normalizado para "claro".
+      expect(u.preferencias.tema, 'claro');
       expect(u.membroDesde?.year, 2024);
+
+      final uEscuro = UserModel.fromJson({
+        'id': 2,
+        'nome': 'Ana',
+        'email': 'ana@x.com',
+        'preferencias': {'tema': 'escuro'},
+      });
+      expect(uEscuro.preferencias.tema, 'escuro');
     });
 
     test('OperadoraModel usa nome fantasia quando houver e expõe status', () {

@@ -19,12 +19,13 @@ class HomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = AppColors.watchDark(context);
     final width = MediaQuery.sizeOf(context).width;
     final mobile = width < 640;
     final pad = mobile ? 20.0 : 32.0;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.pageBg,
       body: SafeArea(
         child: SingleChildScrollView(
           child: ConstrainedBox(
@@ -62,7 +63,7 @@ class HomeView extends StatelessWidget {
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.mint.withValues(alpha: 0.18),
+                                  color: AppColors.mint.withValues(alpha: dark ? 0.22 : 0.18),
                                   blurRadius: 80,
                                   spreadRadius: 30,
                                 ),
@@ -74,7 +75,7 @@ class HomeView extends StatelessWidget {
                       ),
                       const SizedBox(height: 28),
                       Text('intuitivecare',
-                          style: AppText.display(mobile ? 32 : 40, color: AppColors.forest)),
+                          style: AppText.display(mobile ? 32 : 40, color: AppColors.brandText)),
                       const SizedBox(height: 4),
                       Text('CONTROLE E TRATAMENTO DE DADOS',
                           softWrap: false,
@@ -88,7 +89,7 @@ class HomeView extends StatelessWidget {
                             TextSpan(
                               children: [
                                 const TextSpan(text: 'Pare de tratar planilhas.\n'),
-                                TextSpan(text: 'Comece a tomar decisões.', style: TextStyle(color: AppColors.forest)),
+                                TextSpan(text: 'Comece a tomar decisões.', style: TextStyle(color: AppColors.brandText)),
                               ],
                             ),
                             textAlign: TextAlign.center,
@@ -163,7 +164,7 @@ class _Beneficio extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(999))),
         const SizedBox(height: 16),
-        Text(titulo, style: AppText.display(18, weight: FontWeight.w700, color: AppColors.forest)),
+        Text(titulo, style: AppText.display(18, weight: FontWeight.w700, color: AppColors.brandText)),
         const SizedBox(height: 8),
         Text(texto, style: AppText.sans(14, color: AppColors.muted, height: 1.6)),
       ],

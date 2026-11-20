@@ -133,7 +133,7 @@ class _RegisterViewState extends State<RegisterView> {
           onChanged: (v) => setState(() => _aceite = v ?? false),
           contentPadding: EdgeInsets.zero,
           dense: true,
-          activeColor: AppColors.forest,
+          activeColor: AppColors.primaryBg,
           controlAffinity: ListTileControlAffinity.leading,
           title: Text('Li e aceito os termos de uso.', style: AppText.sans(14)),
         ),

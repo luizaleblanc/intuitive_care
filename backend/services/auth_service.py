@@ -211,7 +211,7 @@ class AuthService:
             if usuario_atual and not usuario_atual.is_admin:
                 for chave_admin in ("formato_exportacao", "resumo_semanal", "alerta_novos_dados"):
                     limpas.pop(chave_admin, None)
-            if limpas.get("tema") not in (None, "claro", "escuro", "sistema"):
+            if limpas.get("tema") not in (None, "claro", "escuro"):
                 raise BusinessRuleError("Tema inválido.", 400)
             if limpas.get("formato_exportacao") not in (None, "CSV", "PDF", "XLSX"):
                 raise BusinessRuleError("Formato de exportação inválido.", 400)

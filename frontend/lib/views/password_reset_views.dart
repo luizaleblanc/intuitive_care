@@ -176,7 +176,7 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
           TextButton(
             onPressed: () => context.go('/esqueci-senha'),
             child: Text('Solicitar novo link',
-                style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.forest)),
+                style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.brandText)),
           ),
         ],
         const SizedBox(height: 16),

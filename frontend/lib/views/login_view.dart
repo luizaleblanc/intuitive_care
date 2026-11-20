@@ -71,9 +71,10 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.watchDark(context);
     final desktop = MediaQuery.sizeOf(context).width >= 1024;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.pageBg,
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -97,7 +98,7 @@ class _LoginViewState extends State<LoginView> {
                 Flexible(
                   child: TextButton.icon(
                     onPressed: () => context.go('/'),
-                    icon: const Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
+                    icon: Icon(LucideIcons.arrowLeft, size: 15, color: AppColors.muted),
                     label: Text('Página inicial',
                         overflow: TextOverflow.ellipsis,
                         style: AppText.sans(14, weight: FontWeight.w500, color: AppColors.muted)),
@@ -152,7 +153,7 @@ class _LoginViewState extends State<LoginView> {
                             trailing: InkWell(
                               onTap: () => context.go('/esqueci-senha'),
                               child: Text('Esqueci a senha',
-                                  style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.forest)),
+                                  style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.brandText)),
                             ),
                             child: PillTextField(
                               controller: _senha,
@@ -193,7 +194,7 @@ class _LoginViewState extends State<LoginView> {
                             child: TextButton(
                               onPressed: () => context.go('/cadastro'),
                               child: Text('Não tem conta? Criar conta',
-                                  style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.forest)),
+                                  style: AppText.sans(14, weight: FontWeight.w600, color: AppColors.brandText)),
                             ),
                           ),
                           if (kDebugMode) ...[
@@ -227,52 +228,60 @@ class _AcessosDemo extends StatelessWidget {
   const _AcessosDemo({required this.contas, required this.onFill});
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: AppColors.dsCard, borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('ACESSOS DE DEMONSTRAÇÃO', style: AppText.sans(12, weight: FontWeight.w700, color: AppColors.muted, spacing: 12 * 0.08)),
-            const SizedBox(height: 12),
-            for (final c in contas) ...[
-              Material(
-                color: Colors.white,
+  Widget build(BuildContext context) {
+    AppColors.watchDark(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.dsCard,
+        borderRadius: BorderRadius.circular(16),
+        border: AppColors.isDark ? Border.all(color: AppColors.cardBorder) : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ACESSOS DE DEMONSTRAÇÃO',
+              style: AppText.sans(12, weight: FontWeight.w700, color: AppColors.muted, spacing: 12 * 0.08)),
+          const SizedBox(height: 12),
+          for (final c in contas) ...[
+            Material(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => onFill(c.$1, c.$2),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: const BoxDecoration(color: AppColors.forest, shape: BoxShape.circle),
-                          child: Icon(c.$4, size: 14, color: AppColors.mint),
+                onTap: () => onFill(c.$1, c.$2),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(color: AppColors.primaryBg, shape: BoxShape.circle),
+                        child: Icon(c.$4, size: 14, color: AppColors.mint),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(c.$3, style: AppText.sans(14, weight: FontWeight.w600)),
+                            Text('${c.$1} · ${c.$2}',
+                                overflow: TextOverflow.ellipsis,
+                                style: AppText.mono(11, weight: FontWeight.w400, color: AppColors.caption)),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(c.$3, style: AppText.sans(14, weight: FontWeight.w600)),
-                              Text('${c.$1} · ${c.$2}',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppText.mono(11, weight: FontWeight.w400, color: AppColors.caption)),
-                            ],
-                          ),
-                        ),
-                        Text('Preencher', style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.forest)),
-                      ],
-                    ),
+                      ),
+                      Text('Preencher', style: AppText.sans(12, weight: FontWeight.w600, color: AppColors.brandText)),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
+            const SizedBox(height: 8),
           ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 }
