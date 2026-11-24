@@ -1,39 +1,70 @@
-import base64
-import hashlib
-import hmac
 import json
-import os
 import re
-import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from threading import Thread
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from backend.config import Config
 from backend.models.usuario_model import PREFERENCIAS_PADRAO, Usuario
 from backend.repositories.usuario_repository import UsuarioRepository
 from backend.services.email_service import EmailService
+from backend.services.jwt_tokens import _create_jwt, token_expiration, verify_token
+from backend.services.password_reset_service import PasswordResetService
 from backend.services.validators import BusinessRuleError, validar_graficos, validate_email, validate_password
 
 
-RESET_MAX_PEDIDOS = 3
-RESET_JANELA_MIN = 15
+def _parse_data_nascimento(raw_value: Any):
+    valor = (raw_value or "").strip()
+    if not valor:
+        return None
+    nascimento = None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            nascimento = datetime.strptime(valor[:10], fmt).date()
+            break
+        except ValueError:
+            continue
+    if nascimento is None:
+        raise BusinessRuleError("Data de nascimento inválida. Use o formato AAAA-MM-DD.", 400)
+    if nascimento > datetime.now().date():
+        raise BusinessRuleError("A data de nascimento não pode estar no futuro.", 400)
+    return nascimento
 
 
-def _agora() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+def _validar_foto_perfil(foto: Any) -> Optional[str]:
+    if not foto:
+        return None
+    if not re.match(r"^data:image/(png|jpe?g|webp);base64,", str(foto)):
+        raise BusinessRuleError("A foto deve ser uma imagem JPG, PNG ou WebP.", 400)
+    # Base64 ocupa ~4/3 do arquivo original: 2 MB -> ~2,8 MB de texto.
+    if len(foto) > 2_800_000:
+        raise BusinessRuleError("A foto deve ter no máximo 2 MB.", 400)
+    return foto
 
 
-def _b64url_encode(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
-
-
-def _b64url_decode(data: str) -> bytes:
-    padding = "=" * (-len(data) % 4)
-    return base64.urlsafe_b64decode(data + padding)
+def _preparar_preferencias(user_id: int, raw_prefs: Any) -> str:
+    prefs = raw_prefs or {}
+    if not isinstance(prefs, dict):
+        raise BusinessRuleError("Preferências inválidas.", 400)
+    atual = UsuarioRepository.find_by_id(user_id) or {}
+    usuario_atual = Usuario.from_row(atual) if atual else None
+    limpas = {k: prefs[k] for k in PREFERENCIAS_PADRAO if k in prefs}
+    if usuario_atual and not usuario_atual.is_admin:
+        for chave_admin in ("formato_exportacao", "resumo_semanal", "alerta_novos_dados"):
+            limpas.pop(chave_admin, None)
+    if limpas.get("tema") not in (None, "claro", "escuro"):
+        raise BusinessRuleError("Tema inválido.", 400)
+    if limpas.get("formato_exportacao") not in (None, "CSV", "PDF", "XLSX"):
+        raise BusinessRuleError("Formato de exportação inválido.", 400)
+    if limpas.get("trimestre_padrao") not in (None, 1, 2, 3, 4):
+        raise BusinessRuleError("Trimestre padrão inválido.", 400)
+    if "graficos_explorar" in limpas:
+        limpas["graficos_explorar"] = validar_graficos(limpas["graficos_explorar"])
+    base = usuario_atual.preferencias if usuario_atual else dict(PREFERENCIAS_PADRAO)
+    base.update(limpas)
+    return json.dumps(base, ensure_ascii=False)
 
 
 class AuthService:
@@ -41,55 +72,24 @@ class AuthService:
 
     @staticmethod
     def _create_jwt(user: Usuario, jti: str, expires_at: datetime) -> str:
-        header = {"alg": "HS256", "typ": "JWT"}
-        payload = {
-            "sub": str(user.id),
-            "email": user.email,
-            "nome": user.nome,
-            "perfil": user.perfil,
-            "jti": jti,
-            "iat": int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp()),
-            "exp": int(expires_at.timestamp()),
-        }
-        header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
-        payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-        signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
-        signature = hmac.new(Config.SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
-        return f"{header_b64}.{payload_b64}.{_b64url_encode(signature)}"
+        return _create_jwt(user, jti, expires_at)
 
     @staticmethod
     def verify_token(token: str) -> Dict[str, Any]:
-        if not token or token.count(".") != 2:
-            raise BusinessRuleError("Token de autenticação inválido.", 401)
+        return verify_token(token)
 
-        header_b64, payload_b64, sig_b64 = token.split(".")
-        signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
-        expected_sig = hmac.new(Config.SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
-        try:
-            provided_sig = _b64url_decode(sig_b64)
-        except Exception:
-            raise BusinessRuleError("Assinatura do token malformada.", 401)
-
-        if not hmac.compare_digest(expected_sig, provided_sig):
-            raise BusinessRuleError("Token de autenticação com assinatura inválida.", 401)
-
-        try:
-            payload = json.loads(_b64url_decode(payload_b64).decode("utf-8"))
-        except Exception:
-            raise BusinessRuleError("Carga útil do token inválida.", 401)
-
-        if int(payload.get("exp", 0)) < int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp()):
-            raise BusinessRuleError("Sessão expirada. Faça login novamente.", 401)
-
-        jti = payload.get("jti")
-        if not jti or not UsuarioRepository.is_session_active(jti):
-            raise BusinessRuleError("Sessão encerrada ou revogada. Faça login novamente.", 401)
-
-        user_row = UsuarioRepository.find_by_id(int(payload["sub"]))
-        if not user_row or not bool(user_row.get("ativo", 1)):
-            raise BusinessRuleError("Usuário inativo ou não encontrado.", 401)
-
-        return {"user": Usuario.from_row(user_row), "jti": jti, "payload": payload}
+    @classmethod
+    def _emitir_sessao(cls, user: Usuario, mensagem: str) -> Dict[str, Any]:
+        jti = uuid.uuid4().hex
+        expires_at = token_expiration()
+        UsuarioRepository.save_session_token(user.id, jti, expires_at)  # type: ignore[arg-type]
+        token = cls._create_jwt(user, jti, expires_at)
+        return {
+            "mensagem": mensagem,
+            "token": token,
+            "expira_em": expires_at.isoformat() + "Z",
+            "usuario": user.to_dict(),
+        }
 
     @classmethod
     def register(cls, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -110,18 +110,7 @@ class AuthService:
         if cargo:
             user_row = UsuarioRepository.update_user_profile(user_row["id"], {"cargo": cargo}) or user_row
         user = Usuario.from_row(user_row)
-
-        jti = uuid.uuid4().hex
-        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=Config.TOKEN_EXPIRATION_HOURS)
-        UsuarioRepository.save_session_token(user.id, jti, expires_at)  # type: ignore[arg-type]
-        token = cls._create_jwt(user, jti, expires_at)
-
-        return {
-            "mensagem": "Usuário cadastrado com sucesso.",
-            "token": token,
-            "expira_em": expires_at.isoformat() + "Z",
-            "usuario": user.to_dict(),
-        }
+        return cls._emitir_sessao(user, "Usuário cadastrado com sucesso.")
 
     @classmethod
     def login(cls, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -139,17 +128,7 @@ class AuthService:
 
         UsuarioRepository.touch_ultimo_acesso(user_row["id"])
         user = Usuario.from_row(UsuarioRepository.find_by_id(user_row["id"]) or user_row)
-        jti = uuid.uuid4().hex
-        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=Config.TOKEN_EXPIRATION_HOURS)
-        UsuarioRepository.save_session_token(user.id, jti, expires_at)  # type: ignore[arg-type]
-        token = cls._create_jwt(user, jti, expires_at)
-
-        return {
-            "mensagem": "Autenticação realizada com sucesso.",
-            "token": token,
-            "expira_em": expires_at.isoformat() + "Z",
-            "usuario": user.to_dict(),
-        }
+        return cls._emitir_sessao(user, "Autenticação realizada com sucesso.")
 
     @staticmethod
     def logout(jti: str) -> Dict[str, Any]:
@@ -179,54 +158,13 @@ class AuthService:
                 campos[chave] = valor[:limite] or None
 
         if "data_nascimento" in data:
-            valor = (data.get("data_nascimento") or "").strip()
-            if valor:
-                nascimento = None
-                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
-                    try:
-                        nascimento = datetime.strptime(valor[:10], fmt).date()
-                        break
-                    except ValueError:
-                        continue
-                if nascimento is None:
-                    raise BusinessRuleError("Data de nascimento inválida. Use o formato AAAA-MM-DD.", 400)
-                if nascimento > datetime.now().date():
-                    raise BusinessRuleError("A data de nascimento não pode estar no futuro.", 400)
-                campos["data_nascimento"] = nascimento
-            else:
-                campos["data_nascimento"] = None
+            campos["data_nascimento"] = _parse_data_nascimento(data.get("data_nascimento"))
 
         if "foto" in data:
-            foto = data.get("foto")
-            if foto:
-                if not re.match(r"^data:image/(png|jpe?g|webp);base64,", str(foto)):
-                    raise BusinessRuleError("A foto deve ser uma imagem JPG, PNG ou WebP.", 400)
-                # Base64 ocupa ~4/3 do arquivo original: 2 MB -> ~2,8 MB de texto.
-                if len(foto) > 2_800_000:
-                    raise BusinessRuleError("A foto deve ter no máximo 2 MB.", 400)
-            campos["foto"] = foto or None
+            campos["foto"] = _validar_foto_perfil(data.get("foto"))
 
         if "preferencias" in data:
-            prefs = data.get("preferencias") or {}
-            if not isinstance(prefs, dict):
-                raise BusinessRuleError("Preferências inválidas.", 400)
-            atual = UsuarioRepository.find_by_id(user_id) or {}
-            usuario_atual = Usuario.from_row(atual) if atual else None
-            limpas = {k: prefs[k] for k in PREFERENCIAS_PADRAO if k in prefs}
-            if usuario_atual and not usuario_atual.is_admin:
-                for chave_admin in ("formato_exportacao", "resumo_semanal", "alerta_novos_dados"):
-                    limpas.pop(chave_admin, None)
-            if limpas.get("tema") not in (None, "claro", "escuro"):
-                raise BusinessRuleError("Tema inválido.", 400)
-            if limpas.get("formato_exportacao") not in (None, "CSV", "PDF", "XLSX"):
-                raise BusinessRuleError("Formato de exportação inválido.", 400)
-            if limpas.get("trimestre_padrao") not in (None, 1, 2, 3, 4):
-                raise BusinessRuleError("Trimestre padrão inválido.", 400)
-            if "graficos_explorar" in limpas:
-                limpas["graficos_explorar"] = validar_graficos(limpas["graficos_explorar"])
-            base = usuario_atual.preferencias if usuario_atual else dict(PREFERENCIAS_PADRAO)
-            base.update(limpas)
-            campos["preferencias"] = json.dumps(base, ensure_ascii=False)
+            campos["preferencias"] = _preparar_preferencias(user_id, data.get("preferencias"))
 
         updated = UsuarioRepository.update_user_profile(user_id, campos)
         if not updated:
@@ -238,64 +176,13 @@ class AuthService:
 
     @staticmethod
     def _enviar_reset(email: str, nome: str, link: str) -> None:
-        try:
-            EmailService.enviar_reset_senha(email, nome, link)
-        except Exception as exc:  # A resposta ao cliente não pode revelar falhas por conta.
-            print(f"[EMAIL][erro] Falha ao enviar redefinição de senha: {type(exc).__name__}", flush=True)
+        PasswordResetService._enviar_reset(email, nome, link, email_service=EmailService)
 
     @classmethod
     def esqueci_senha(cls, data: Dict[str, Any]) -> Dict[str, Any]:
-        email = validate_email(data.get("email"))
-        agora = _agora()
-        email_hash = hashlib.sha256(email.encode("utf-8")).hexdigest()
-        if not UsuarioRepository.registrar_pedido_reset(
-            email_hash, agora, agora - timedelta(minutes=RESET_JANELA_MIN), RESET_MAX_PEDIDOS
-        ):
-            raise BusinessRuleError("Muitas tentativas. Aguarde 15 minutos e tente novamente.", 429)
-
-        user_row = UsuarioRepository.find_by_email(email)
-        if user_row and bool(user_row.get("ativo", 1)):
-            token = secrets.token_urlsafe(32)
-            UsuarioRepository.criar_token_reset(
-                user_row["id"],
-                hashlib.sha256(token.encode("ascii")).hexdigest(),
-                agora + timedelta(minutes=Config.RESET_TOKEN_EXPIRA_MIN),
-            )
-            link = f"{Config.FRONTEND_URL}/#/redefinir-senha?token={token}"
-            # Em segundo plano, para o tempo de resposta não denunciar contas existentes.
-            destino = (user_row["email"], user_row["nome"], link)
-            if os.getenv("VERCEL"):
-                # Na Vercel a função congela após responder: o envio precisa terminar antes.
-                cls._enviar_reset(*destino)
-            else:
-                Thread(target=cls._enviar_reset, args=destino, daemon=True).start()
-
-        return {"mensagem": "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."}
+        # Thread e EmailService são resolvidos no namespace deste módulo para preservar mocks.
+        return PasswordResetService.esqueci_senha(data, thread_cls=Thread, sender=cls._enviar_reset)
 
     @staticmethod
     def redefinir_senha(data: Dict[str, Any]) -> Dict[str, Any]:
-        token = (data.get("token") or "").strip()
-        nova_senha = validate_password(data.get("nova_senha"))
-        registro = (
-            UsuarioRepository.buscar_token_reset(hashlib.sha256(token.encode("utf-8")).hexdigest())
-            if token
-            else None
-        )
-        if not registro:
-            raise BusinessRuleError("Link de redefinição inválido.", 400)
-        if registro.get("usado_em"):
-            raise BusinessRuleError("Este link já foi utilizado. Solicite um novo.", 400)
-
-        agora = _agora()
-        expira_em = registro["expira_em"]
-        if isinstance(expira_em, str):
-            expira_em = datetime.fromisoformat(expira_em)
-        if expira_em < agora:
-            raise BusinessRuleError("Este link expirou. Solicite um novo.", 400)
-        if not UsuarioRepository.consumir_token_reset(registro["id"], agora):
-            raise BusinessRuleError("Este link já foi utilizado. Solicite um novo.", 400)
-
-        usuario_id = registro["usuario_id"]
-        UsuarioRepository.update_password(usuario_id, generate_password_hash(nova_senha, method="pbkdf2:sha256"))
-        UsuarioRepository.revoke_all_user_sessions(usuario_id)
-        return {"mensagem": "Senha redefinida com sucesso. Faça login com a nova senha."}
+        return PasswordResetService.redefinir_senha(data)

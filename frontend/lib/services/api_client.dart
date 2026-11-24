@@ -2,28 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'api_exception.dart';
 
-/// Exceção padronizada para erros HTTP/JSON retornados pela API Flask.
-class ApiException implements Exception {
-  final int statusCode;
-  final String message;
-  final Map<String, dynamic>? details;
-
-  const ApiException({
-    required this.statusCode,
-    required this.message,
-    this.details,
-  });
-
-  bool get isUnauthorized => statusCode == 401;
-
-  @override
-  String toString() => message;
-}
+export 'package:flutter/foundation.dart' show VoidCallback;
+export 'api_exception.dart';
 
 /// Cliente HTTP centralizado para comunicação exclusiva em JSON com a API Flask.
 class ApiClient {
@@ -117,29 +102,7 @@ class ApiClient {
       );
     }
 
-    if (response.statusCode == 401) {
-      onUnauthorized?.call();
-    }
-
-    dynamic decoded;
-    if (response.bodyBytes.isNotEmpty) {
-      try {
-        decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      } catch (_) {
-        decoded = null;
-      }
-    }
-    final mensagemApi = decoded is Map<String, dynamic> ? (decoded['erro'] ?? decoded['mensagem']) : null;
-    if (mensagemApi == null) {
-      debugPrint('[ApiClient] HTTP ${response.statusCode} sem mensagem da API em ${response.request?.url}');
-    }
-    throw ApiException(
-      statusCode: response.statusCode,
-      message: mensagemApi?.toString() ?? mensagemPorStatus(response.statusCode),
-      details: decoded is Map<String, dynamic> && decoded['detalhes'] is Map<String, dynamic>
-          ? decoded['detalhes'] as Map<String, dynamic>
-          : null,
-    );
+    _throwHttpError(response, _decodeJsonOrNull(response.bodyBytes));
   }
 
   /// Extrai o nome de arquivo do cabeçalho HTTP `Content-Disposition`.
@@ -207,27 +170,32 @@ class ApiClient {
       throw const ApiException(statusCode: 0, message: mensagemSemConexao);
     }
 
-    dynamic decoded;
-    if (response.body.isNotEmpty) {
-      try {
-        decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      } catch (_) {
-        decoded = null; // Resposta que não é da API (ex.: página HTML de erro).
-      }
-    }
+    final decoded = _decodeJsonOrNull(response.bodyBytes);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      if (decoded == null && response.body.isNotEmpty) {
+      if (decoded == null && response.bodyBytes.isNotEmpty) {
         debugPrint('[ApiClient] Resposta sem JSON de ${response.request?.url}');
         throw const ApiException(statusCode: 0, message: mensagemServidorIndisponivel);
       }
       return decoded;
     }
 
+    _throwHttpError(response, decoded);
+  }
+
+  dynamic _decodeJsonOrNull(Uint8List bodyBytes) {
+    if (bodyBytes.isEmpty) return null;
+    try {
+      return jsonDecode(utf8.decode(bodyBytes));
+    } catch (_) {
+      return null; // Resposta que não é JSON (ex.: página HTML de erro).
+    }
+  }
+
+  Never _throwHttpError(http.Response response, dynamic decoded) {
     if (response.statusCode == 401) {
       onUnauthorized?.call();
     }
-
     // Mensagens da própria API já são escritas para o usuário; o resto vira texto amigável.
     final mensagemApi = decoded is Map<String, dynamic> ? (decoded['erro'] ?? decoded['mensagem']) : null;
     if (mensagemApi == null) {
@@ -242,21 +210,3 @@ class ApiClient {
     );
   }
 }
-
-const mensagemSemConexao = 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
-const mensagemTempoEsgotado = 'O servidor demorou para responder. Tente novamente em instantes.';
-const mensagemServidorIndisponivel =
-    'O serviço está indisponível no momento. Tente novamente em alguns minutos.';
-
-/// Texto mostrado ao usuário quando a resposta não traz uma mensagem da API.
-String mensagemPorStatus(int status) {
-  if (status == 400 || status == 422) return 'Alguns dados não foram aceitos. Revise as informações e tente de novo.';
-  if (status == 401) return 'Sua sessão expirou. Entre novamente.';
-  if (status == 403) return 'Você não tem permissão para esta ação.';
-  if (status == 404) return mensagemServidorIndisponivel;
-  if (status == 429) return 'Muitas tentativas em pouco tempo. Aguarde alguns minutos.';
-  if (status >= 500) return 'Ocorreu um erro no servidor. Tente novamente em instantes.';
-  return 'Não foi possível concluir a ação. Tente novamente.';
-}
-
-typedef VoidCallback = void Function();

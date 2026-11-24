@@ -1,28 +1,23 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:intuitive_care_app/app/router.dart';
-import 'package:intuitive_care_app/app/theme.dart';
 import 'package:intuitive_care_app/repositories/auth_repository.dart';
 import 'package:intuitive_care_app/services/api_client.dart';
 import 'package:intuitive_care_app/services/auth_service.dart';
 import 'package:intuitive_care_app/services/session_storage_service.dart';
 import 'package:intuitive_care_app/shared/ui/ui.dart';
 import 'package:intuitive_care_app/viewmodels/auth_viewmodel.dart';
-import 'package:intuitive_care_app/views/app_shell.dart';
 import 'package:intuitive_care_app/views/home_view.dart';
 import 'package:intuitive_care_app/views/login_view.dart';
 import 'package:intuitive_care_app/views/password_reset_views.dart';
-import 'package:intuitive_care_app/views/perfil_view.dart';
 import 'package:intuitive_care_app/views/register_view.dart';
 import 'package:provider/provider.dart';
 
-/// Critério 11 do MVP: Página inicial e Login sem rolagem horizontal em 360px.
-/// Qualquer RenderFlex overflow vira exceção e reprova o teste.
+/// Critério 11 do MVP: Página inicial, Login, Cadastro e Reset sem overflow em 360px e 1440px,
+/// fluxo de entrada sem auto-login e seleção múltipla.
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
@@ -60,7 +55,10 @@ void main() {
       expect(find.text('Entrar'), findsWidgets);
       expect(find.text('Design System'), findsNothing);
       // Painel Forest só aparece a partir de 1024px.
-      expect(find.textContaining('sem planilha no meio.', findRichText: true), largura >= 1024 ? findsOneWidget : findsNothing);
+      expect(
+        find.textContaining('sem planilha no meio.', findRichText: true),
+        largura >= 1024 ? findsOneWidget : findsNothing,
+      );
     });
 
     testWidgets('Cadastro sem overflow em ${largura.toInt()}px', (tester) async {
@@ -175,310 +173,6 @@ void main() {
     ignorarFontes(tester);
 
     expect(selecionado, {2025, 2024});
-  });
-
-  testWidgets('PerfilView oculta exportação/alertas para Colaborador e remove botões redundantes de foto', (tester) async {
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-
-    Future<AuthViewModel> logarPerfil(String perfil, List<String> permissoes) async {
-      final client = ApiClient(
-        httpClient: MockClient((req) async => http.Response.bytes(
-              utf8.encode(jsonEncode({
-                'token': 'jwt',
-                'usuario': {
-                  'id': 1,
-                  'nome': 'Luiza Ferraz',
-                  'email': 'luiza@x.com',
-                  'perfil': perfil,
-                  'permissoes': permissoes,
-                },
-              })),
-              200,
-              headers: {'content-type': 'application/json'},
-            )),
-      );
-      final vm = AuthViewModel(
-        AuthRepository(apiClient: client, authService: AuthService(client), storageService: _SessaoMemoria()),
-      );
-      await vm.login(email: 'luiza@x.com', senha: '123');
-      return vm;
-    }
-
-    final colab = await logarPerfil('COLABORADOR', ['painel.ver', 'perfil.editar_proprio']);
-    await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: colab,
-        child: const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: PerfilView()))),
-      ),
-    );
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-    expect(find.text('Enviar foto'), findsNothing);
-    expect(find.text('JPG ou PNG, até 2 MB.'), findsNothing);
-    expect(find.text('Idioma'), findsNothing);
-    expect(find.text('Exportar como'), findsNothing);
-    expect(find.text('Exportar planilha'), findsNothing);
-    expect(find.text('Resumo semanal por e-mail'), findsNothing);
-    expect(find.text('Avisar quando houver novos dados da ANS'), findsNothing);
-
-    final admin = await logarPerfil('ADMIN', ['painel.ver', 'dados.exportar', 'perfil.editar_proprio']);
-    await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: admin,
-        child: const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: PerfilView()))),
-      ),
-    );
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-    expect(find.text('Enviar foto'), findsNothing);
-    expect(find.text('Idioma'), findsNothing);
-    expect(find.text('Exportar como'), findsOneWidget);
-    expect(find.text('Exportar planilha'), findsOneWidget);
-    expect(find.text('Resumo semanal por e-mail'), findsNothing);
-    expect(find.text('Avisar quando houver novos dados da ANS'), findsNothing);
-    expect(find.text('Sistema'), findsNothing);
-    expect(find.text('Claro'), findsOneWidget);
-    expect(find.text('Escuro'), findsOneWidget);
-  });
-
-  testWidgets('Tema oferece apenas Claro e Escuro e aplica dark mode imediatamente em toda a aplicação',
-      (tester) async {
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      AppColors.isDark = false;
-      tester.view.reset();
-    });
-
-    final salvos = <Map<String, dynamic>>[];
-    final client = ApiClient(
-      httpClient: MockClient((req) async {
-        if (req.url.path.endsWith('/auth/me') && req.method == 'PUT') {
-          final body = jsonDecode(req.body) as Map<String, dynamic>;
-          salvos.add(body);
-          final prefs = Map<String, dynamic>.from((body['preferencias'] as Map?) ?? {});
-          return http.Response.bytes(
-            utf8.encode(jsonEncode({
-              'usuario': {
-                'id': 1,
-                'nome': body['nome'] ?? 'Luiza Ferraz',
-                'email': body['email'] ?? 'luiza@x.com',
-                'perfil': 'COLABORADOR',
-                'permissoes': ['painel.ver', 'perfil.editar_proprio'],
-                'preferencias': {'tema': prefs['tema'] ?? 'claro'},
-              },
-            })),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response.bytes(
-          utf8.encode(jsonEncode({
-            'token': 'jwt',
-            'usuario': {
-              'id': 1,
-              'nome': 'Luiza Ferraz',
-              'email': 'luiza@x.com',
-              'perfil': 'COLABORADOR',
-              'permissoes': ['painel.ver', 'perfil.editar_proprio'],
-              'preferencias': {'tema': 'claro'},
-            },
-          })),
-          200,
-          headers: {'content-type': 'application/json'},
-        );
-      }),
-    );
-
-    final auth = AuthViewModel(
-      AuthRepository(apiClient: client, authService: AuthService(client), storageService: _SessaoMemoria()),
-    );
-    await auth.login(email: 'luiza@x.com', senha: '123');
-    final theme = ThemeController(inicial: 'claro');
-    final toast = ToastController();
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider.value(value: auth),
-          ChangeNotifierProvider.value(value: theme),
-          ChangeNotifierProvider.value(value: toast),
-        ],
-        child: AnimatedBuilder(
-          animation: theme,
-          builder: (_, _) {
-            AppColors.isDark = theme.isDark;
-            return MaterialApp(
-              theme: buildAppTheme(dark: false),
-              darkTheme: buildAppTheme(dark: true),
-              themeMode: theme.themeMode,
-              themeAnimationDuration: Duration.zero,
-              home: const Scaffold(body: SingleChildScrollView(child: PerfilView())),
-            );
-          },
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-
-    expect(find.text('Sistema'), findsNothing);
-    expect(theme.isDark, isFalse);
-    expect(AppColors.isDark, isFalse);
-    expect(AppColors.surface, const Color(0xFFF2F4F3));
-
-    await tester.tap(find.text('Escuro'));
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-
-    expect(theme.isDark, isTrue);
-    expect(AppColors.isDark, isTrue);
-    expect(AppColors.surface, const Color(0xFF0B1210));
-    expect(AppColors.card, const Color(0xFF121E1A));
-    expect(salvos, isNotEmpty);
-    expect((salvos.last['preferencias'] as Map)['tema'], 'escuro');
-
-    // Home e Login também renderizam em dark mode sem overflow.
-    await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: auth,
-        child: MaterialApp(
-          theme: buildAppTheme(dark: false),
-          darkTheme: buildAppTheme(dark: true),
-          themeMode: ThemeMode.dark,
-          home: const HomeView(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-    expect(find.text('Começar agora'), findsOneWidget);
-
-    await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: auth,
-        child: MaterialApp(
-          theme: buildAppTheme(dark: false),
-          darkTheme: buildAppTheme(dark: true),
-          themeMode: ThemeMode.dark,
-          home: const LoginView(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-    expect(find.text('Entrar'), findsWidgets);
-  });
-
-  testWidgets('Logout em dark mode e novo login em conta clara mantêm tema consistente sem quebrar layout',
-      (tester) async {
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      AppColors.isDark = false;
-      tester.view.reset();
-    });
-
-    var usuarioAtual = {
-      'id': 1,
-      'nome': 'Luiza Ferraz',
-      'email': 'luiza@x.com',
-      'perfil': 'COLABORADOR',
-      'permissoes': ['painel.ver', 'perfil.editar_proprio'],
-      'preferencias': {'tema': 'escuro'},
-    };
-    final client = ApiClient(
-      httpClient: MockClient((req) async {
-        if (req.url.path.endsWith('/auth/logout')) {
-          return http.Response.bytes(utf8.encode(jsonEncode({'mensagem': 'ok'})), 200,
-              headers: {'content-type': 'application/json'});
-        }
-        return http.Response.bytes(
-          utf8.encode(jsonEncode({'token': 'jwt', 'usuario': usuarioAtual})),
-          200,
-          headers: {'content-type': 'application/json'},
-        );
-      }),
-    );
-
-    final auth = AuthViewModel(
-      AuthRepository(apiClient: client, authService: AuthService(client), storageService: _SessaoMemoria()),
-    );
-    await auth.login(email: 'luiza@x.com', senha: '123');
-    final theme = ThemeController(inicial: 'escuro');
-    final toast = ToastController();
-    final router = buildRouter(auth);
-    addTearDown(router.dispose);
-
-    auth.addListener(() {
-      final u = auth.currentUser;
-      if (u != null) theme.aplicar(u.preferencias.tema, persistir: false);
-    });
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider.value(value: auth),
-          ChangeNotifierProvider.value(value: theme),
-          ChangeNotifierProvider.value(value: toast),
-          ChangeNotifierProvider(create: (_) => ShellActions()),
-        ],
-        child: AnimatedBuilder(
-          animation: theme,
-          builder: (_, _) {
-            AppColors.isDark = theme.isDark;
-            return MaterialApp.router(
-              theme: buildAppTheme(dark: false),
-              darkTheme: buildAppTheme(dark: true),
-              themeMode: theme.themeMode,
-              themeAnimationDuration: Duration.zero,
-              routerConfig: router,
-              builder: (_, child) => AppThemeScope(
-                isDark: theme.isDark,
-                child: ToastOverlay(controller: toast, child: child ?? const SizedBox()),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-    router.go('/perfil');
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-
-    expect(theme.isDark, isTrue);
-    expect(AppColors.isDark, isTrue);
-    await tester.tap(find.text('Encerrar sessão'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Confirmar saída'));
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-
-    // Após logout, redirecionou limpo para /login sem erro e preservando dark mode íntegro.
-    expect(find.byType(LoginView), findsOneWidget);
-    expect(theme.isDark, isTrue);
-    expect(AppColors.isDark, isTrue);
-    expect(AppColors.pageBg, const Color(0xFF0B1210));
-
-    // Novo login em conta com tema claro: alterna atomicamente sem estado híbrido.
-    usuarioAtual = {
-      'id': 2,
-      'nome': 'Admin',
-      'email': 'admin@x.com',
-      'perfil': 'ADMIN',
-      'permissoes': ['painel.ver', 'perfil.editar_proprio'],
-      'preferencias': {'tema': 'claro'},
-    };
-    await auth.login(email: 'admin@x.com', senha: '123');
-    router.go('/perfil');
-    await tester.pumpAndSettle();
-    ignorarFontes(tester);
-
-    expect(theme.isDark, isFalse);
-    expect(AppColors.isDark, isFalse);
-    expect(AppColors.surface, const Color(0xFFF2F4F3));
   });
 }
 

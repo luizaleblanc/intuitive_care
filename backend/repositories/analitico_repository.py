@@ -1,65 +1,18 @@
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import text
 
 from backend.database.connection import get_connection
-
-Periodo = Tuple[int, int]
-PeriodoInput = Union[Periodo, Sequence[Periodo]]
-
-
-def _norm_periodos(entrada: PeriodoInput) -> List[Periodo]:
-    if not entrada:
-        return []
-    if len(entrada) == 2 and isinstance(entrada[0], int) and isinstance(entrada[1], int):
-        return [(int(entrada[0]), int(entrada[1]))]
-    return [(int(p[0]), int(p[1])) for p in entrada]  # type: ignore[index]
-
-
-def _norm_lista(valor: Union[str, Sequence[str], None], upper: bool = False) -> List[str]:
-    if not valor:
-        return []
-    brutos = [v.strip() for v in valor.split(",")] if isinstance(valor, str) else [str(v).strip() for v in valor]
-    itens = [v.upper() if upper else v for v in brutos if v]
-    return list(dict.fromkeys(itens))
-
-
-def _filtro_periodos(periodos: List[Periodo], alias: str = "d") -> Tuple[str, Dict[str, Any]]:
-    if not periodos:
-        return "1=0", {}
-    prefixo = f"{alias}." if alias else ""
-    partes, params = [], {}
-    for i, (ano, tri) in enumerate(periodos):
-        partes.append(f"({prefixo}ano = :pa{i} AND {prefixo}trimestre = :pt{i})")
-        params[f"pa{i}"] = ano
-        params[f"pt{i}"] = tri
-    return "(" + " OR ".join(partes) + ")", params
-
-
-def _filtro_operadora(
-    uf: Union[str, Sequence[str]] = "",
-    modalidade: Union[str, Sequence[str]] = "",
-) -> Tuple[str, Dict[str, Any], List[str]]:
-    where, params, expanding = [], {}, []
-    ufs = _norm_lista(uf, upper=True)
-    mods = _norm_lista(modalidade)
-    if ufs:
-        where.append("o.uf IN :ufs")
-        params["ufs"] = ufs
-        expanding.append("ufs")
-    if mods:
-        where.append("o.modalidade IN :mods")
-        params["mods"] = mods
-        expanding.append("mods")
-    return (" AND " + " AND ".join(where)) if where else "", params, expanding
-
-
-def _bind_expanding(sql_text: str, expanding: Sequence[str]):
-    stmt = text(sql_text)
-    for nome in expanding:
-        stmt = stmt.bindparams(bindparam(nome, expanding=True))
-    return stmt
+from backend.repositories.analitico_sql_helpers import (
+    Periodo,
+    PeriodoInput,
+    _bind_expanding,
+    _filtro_operadora,
+    _filtro_periodos,
+    _norm_periodos,
+    _preparar_filtros,
+)
+from backend.repositories.contas_repository import ContasRepository
 
 
 class AnaliticoRepository:
@@ -67,6 +20,7 @@ class AnaliticoRepository:
 
     @staticmethod
     def periodos() -> List[Periodo]:
+        """Lista os pares `(ano, trimestre)` disponíveis ordenados do mais recente ao mais antigo."""
         with get_connection() as conn:
             rows = conn.execute(
                 text(
@@ -82,13 +36,18 @@ class AnaliticoRepository:
         uf: Union[str, Sequence[str]] = "",
         modalidade: Union[str, Sequence[str]] = "",
     ) -> Dict[str, float]:
-        periodos = _norm_periodos(periodo)
-        if not periodos:
-            return {"eventos": 0.0, "eventos_mh": 0.0, "contraprestacoes": 0.0,
-                    "comercializacao": 0.0, "administrativas": 0.0, "operadoras": 0.0}
-        cond_p, params_p = _filtro_periodos(periodos, "d")
-        filtro, params_f, expanding = _filtro_operadora(uf, modalidade)
-        params = {**params_p, **params_f}
+        """Soma despesas, receitas e operadoras distintas no recorte informado."""
+        filtros = _preparar_filtros(periodo, uf, modalidade, "d")
+        if not filtros:
+            return {
+                "eventos": 0.0,
+                "eventos_mh": 0.0,
+                "contraprestacoes": 0.0,
+                "comercializacao": 0.0,
+                "administrativas": 0.0,
+                "operadoras": 0.0,
+            }
+        cond_p, filtro, params, expanding = filtros
         stmt = _bind_expanding(
             "SELECT COALESCE(SUM(d.eventos), 0) AS eventos, "
             "COALESCE(SUM(d.eventos_mh), 0) AS eventos_mh, "
@@ -112,12 +71,10 @@ class AnaliticoRepository:
         modalidade: Union[str, Sequence[str]] = "",
     ) -> Optional[float]:
         """Média simples da sinistralidade por operadora (eventos / contraprestações)."""
-        periodos = _norm_periodos(periodo)
-        if not periodos:
+        filtros = _preparar_filtros(periodo, uf, modalidade, "d")
+        if not filtros:
             return None
-        cond_p, params_p = _filtro_periodos(periodos, "d")
-        filtro, params_f, expanding = _filtro_operadora(uf, modalidade)
-        params = {**params_p, **params_f}
+        cond_p, filtro, params, expanding = filtros
         stmt = _bind_expanding(
             "SELECT AVG(d.eventos * 1.0 / d.contraprestacoes) FROM demonstracoes_operadora d "
             "JOIN operadoras o ON o.registro_ans = d.reg_ans "
@@ -155,12 +112,10 @@ class AnaliticoRepository:
         modalidade: Union[str, Sequence[str]] = "",
     ) -> int:
         """Beneficiários médico-hospitalares das operadoras com despesa no período (base do ticket médio)."""
-        periodos = _norm_periodos(periodo)
-        if not periodos:
+        filtros = _preparar_filtros(periodo, uf, modalidade, "b")
+        if not filtros:
             return 0
-        cond_p, params_p = _filtro_periodos(periodos, "b")
-        filtro, params_f, expanding = _filtro_operadora(uf, modalidade)
-        params = {**params_p, **params_f}
+        cond_p, filtro, params, expanding = filtros
         stmt = _bind_expanding(
             "SELECT COALESCE(SUM(b.medico_hospitalar), 0) FROM beneficiarios_trimestre b "
             "JOIN operadoras o ON o.registro_ans = b.reg_ans "
@@ -182,35 +137,31 @@ class AnaliticoRepository:
         limite: int = 8,
         selecionados: Optional[Sequence[Periodo]] = None,
     ):
+        """Retorna série temporal trimestral de `eventos` ou `eventos_mh`."""
         assert campo in ("eventos", "eventos_mh")
         filtro, params, expanding = _filtro_operadora(uf, modalidade)
         if selecionados and len(selecionados) > 1:
-            cond_p, params_p = _filtro_periodos(_norm_periodos(selecionados), "d")
-            stmt = _bind_expanding(
-                f"SELECT d.ano, d.trimestre, SUM(d.{campo}) AS total "
-                "FROM demonstracoes_operadora d JOIN operadoras o ON o.registro_ans = d.reg_ans "
-                f"WHERE {cond_p}{filtro} GROUP BY d.ano, d.trimestre "
-                "ORDER BY d.ano ASC, d.trimestre ASC",
-                expanding,
-            )
-            with get_connection() as conn:
-                rows = conn.execute(stmt, {**params, **params_p}).all()
-            return [{"ano": int(r[0]), "trimestre": int(r[1]), "valor": float(r[2] or 0)} for r in rows]
+            cond_periodo, params_p = _filtro_periodos(_norm_periodos(selecionados), "d")
+            params.update(params_p)
+            order_limit, inverter = "ORDER BY d.ano ASC, d.trimestre ASC", False
+        else:
+            cond_periodo = "1=1"
+            if ate:
+                cond_periodo += " AND (d.ano * 10 + d.trimestre) <= :ate"
+                params["ate"] = ate[0] * 10 + ate[1]
+            params["lim"] = limite
+            order_limit, inverter = "ORDER BY d.ano DESC, d.trimestre DESC LIMIT :lim", True
 
-        cond = ""
-        if ate:
-            cond = " AND (d.ano * 10 + d.trimestre) <= :ate"
-            params["ate"] = ate[0] * 10 + ate[1]
         stmt = _bind_expanding(
             f"SELECT d.ano, d.trimestre, SUM(d.{campo}) AS total "
             "FROM demonstracoes_operadora d JOIN operadoras o ON o.registro_ans = d.reg_ans "
-            f"WHERE 1=1{cond}{filtro} GROUP BY d.ano, d.trimestre "
-            "ORDER BY d.ano DESC, d.trimestre DESC LIMIT :lim",
+            f"WHERE {cond_periodo}{filtro} GROUP BY d.ano, d.trimestre {order_limit}",
             expanding,
         )
         with get_connection() as conn:
-            rows = conn.execute(stmt, {**params, "lim": limite}).all()
-        return [{"ano": int(r[0]), "trimestre": int(r[1]), "valor": float(r[2] or 0)} for r in reversed(rows)]
+            rows = conn.execute(stmt, params).all()
+        itens = reversed(rows) if inverter else rows
+        return [{"ano": int(r[0]), "trimestre": int(r[1]), "valor": float(r[2] or 0)} for r in itens]
 
     @staticmethod
     def por_modalidade(
@@ -218,11 +169,11 @@ class AnaliticoRepository:
         uf: Union[str, Sequence[str]] = "",
         modalidade: Union[str, Sequence[str]] = "",
     ) -> List[Dict[str, Any]]:
-        periodos = _norm_periodos(periodo)
-        if not periodos:
+        """Agrupa despesas assistenciais por modalidade de operadora."""
+        filtros = _preparar_filtros(periodo, uf, modalidade, "d")
+        if not filtros:
             return []
-        cond_p, params_p = _filtro_periodos(periodos, "d")
-        filtro, params_f, expanding = _filtro_operadora(uf, modalidade)
+        cond_p, filtro, params, expanding = filtros
         stmt = _bind_expanding(
             "SELECT COALESCE(o.modalidade, 'Não informada') AS modalidade, SUM(d.eventos) AS total "
             "FROM demonstracoes_operadora d JOIN operadoras o ON o.registro_ans = d.reg_ans "
@@ -231,7 +182,7 @@ class AnaliticoRepository:
             expanding,
         )
         with get_connection() as conn:
-            rows = conn.execute(stmt, {**params_p, **params_f}).all()
+            rows = conn.execute(stmt, params).all()
         return [{"modalidade": r[0], "valor": float(r[1] or 0)} for r in rows]
 
     @staticmethod
@@ -241,12 +192,11 @@ class AnaliticoRepository:
         modalidade: Union[str, Sequence[str]] = "",
         limite: int = 5,
     ):
-        periodos = _norm_periodos(periodo)
-        if not periodos:
+        """Retorna as operadoras com maior despesa médico-hospitalar no período."""
+        filtros = _preparar_filtros(periodo, uf, modalidade, "d")
+        if not filtros:
             return []
-        cond_p, params_p = _filtro_periodos(periodos, "d")
-        filtro, params_f, expanding = _filtro_operadora(uf, modalidade)
-        params = {**params_p, **params_f, "lim": limite}
+        cond_p, filtro, params, expanding = filtros
         stmt = _bind_expanding(
             "SELECT o.registro_ans, o.razao_social, o.nome_fantasia, o.uf, o.modalidade, "
             "SUM(d.eventos_mh) AS valor FROM demonstracoes_operadora d "
@@ -257,93 +207,37 @@ class AnaliticoRepository:
             expanding,
         )
         with get_connection() as conn:
-            rows = conn.execute(stmt, params).mappings().all()
+            rows = conn.execute(stmt, {**params, "lim": limite}).mappings().all()
         return [{**dict(r), "valor": float(r["valor"] or 0)} for r in rows]
 
     @staticmethod
     def operadoras_ativas() -> int:
+        """Conta o total de operadoras cadastradas com status `Ativa`."""
         with get_connection() as conn:
             return int(conn.execute(text("SELECT COUNT(*) FROM operadoras WHERE status = 'Ativa'")).scalar() or 0)
 
-    # ------------------------------------------------------------------ contas
+    # ------------------------------------------------------------------ contas e lotes
     @staticmethod
     def contas(periodo: PeriodoInput, prefixos: List[str], max_nivel: int = 2) -> Dict[str, Dict[str, Any]]:
-        periodos = _norm_periodos(periodo)
-        if not periodos or not prefixos:
-            return {}
-        cond_p, params_p = _filtro_periodos(periodos, "")
-        conds = " OR ".join(f"codigo LIKE :p{i}" for i in range(len(prefixos)))
-        params: Dict[str, Any] = {**params_p, **{f"p{i}": f"{p}%" for i, p in enumerate(prefixos)}, "nivel": max_nivel}
-        with get_connection() as conn:
-            rows = (
-                conn.execute(
-                    text(
-                        "SELECT codigo, MAX(descricao) AS descricao, MIN(nivel) AS nivel, SUM(valor) AS valor "
-                        "FROM contas_setor "
-                        f"WHERE {cond_p} AND nivel <= :nivel AND ({conds}) "
-                        "GROUP BY codigo ORDER BY codigo"
-                    ),
-                    params,
-                )
-                .mappings()
-                .all()
-            )
-        return {r["codigo"]: {**dict(r), "valor": float(r["valor"] or 0)} for r in rows}
+        """Delega consulta de contas do setor para `ContasRepository`."""
+        return ContasRepository.contas(periodo, prefixos, max_nivel=max_nivel)
 
     @staticmethod
     def composicao_mh(periodo: PeriodoInput) -> Dict[str, float]:
-        periodos = _norm_periodos(periodo)
-        if not periodos:
-            return {}
-        cond_p, params_p = _filtro_periodos(periodos, "")
-        with get_connection() as conn:
-            rows = conn.execute(
-                text(
-                    f"SELECT codigo, SUM(valor) FROM contas_setor WHERE {cond_p} "
-                    "AND codigo IN ('41111','41121','41131','41141','41151','41161','41171','41181','41191') "
-                    "GROUP BY codigo"
-                ),
-                params_p,
-            ).all()
-        return {r[0]: float(r[1] or 0) for r in rows}
+        """Delega consulta de composição médico-hospitalar para `ContasRepository`."""
+        return ContasRepository.composicao_mh(periodo)
 
-    # ------------------------------------------------------------------ lotes
     @staticmethod
     def lote(periodo: Periodo) -> Optional[Dict[str, Any]]:
-        with get_connection() as conn:
-            r = (
-                conn.execute(
-                    text("SELECT * FROM lotes_etl WHERE ano = :ano AND trimestre = :tri"),
-                    {"ano": periodo[0], "tri": periodo[1]},
-                )
-                .mappings()
-                .first()
-            )
-            return dict(r) if r else None
+        """Delega consulta de lote ETL para `ContasRepository`."""
+        return ContasRepository.lote(periodo)
 
     @staticmethod
     def lotes(periodos: Sequence[Periodo]) -> List[Dict[str, Any]]:
-        lista = _norm_periodos(periodos)
-        if not lista:
-            return []
-        cond_p, params_p = _filtro_periodos(lista, "")
-        with get_connection() as conn:
-            rows = conn.execute(text(f"SELECT * FROM lotes_etl WHERE {cond_p}"), params_p).mappings().all()
-            return [dict(r) for r in rows]
+        """Delega consulta de múltiplos lotes ETL para `ContasRepository`."""
+        return ContasRepository.lotes(periodos)
 
     @staticmethod
     def auditar_lote(periodo: Periodo, usuario: str) -> int:
-        with get_connection() as conn:
-            res = conn.execute(
-                text(
-                    "UPDATE lotes_etl SET auditado = 1, auditado_por = :u, auditado_em = :agora "
-                    "WHERE ano = :ano AND trimestre = :tri"
-                ),
-                {
-                    "u": usuario,
-                    "agora": datetime.now(timezone.utc).replace(tzinfo=None),
-                    "ano": periodo[0],
-                    "tri": periodo[1],
-                },
-            )
-            return res.rowcount
+        """Delega registro de auditoria de lote para `ContasRepository`."""
+        return ContasRepository.auditar_lote(periodo, usuario)
