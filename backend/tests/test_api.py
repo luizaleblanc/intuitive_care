@@ -550,7 +550,7 @@ class PerfisEAnaliticoTestCase(IntuitiveCareApiTestCase):
         self.assertFalse(prefs_admin["resumo_semanal"])
         self.assertFalse(prefs_admin["alerta_novos_dados"])
 
-        ruim = self.client.put("/api/auth/me", json={"foto": "data:image/gif;base64,AAA"}, headers=h)
+        ruim = self.client.put("/api/auth/me", json={"foto": "data:image/gif;base64,AAA"}, headers=h_novo)
         self.assertEqual(ruim.status_code, 400)
 
     def test_exportacao_csv_somente_admin(self):
