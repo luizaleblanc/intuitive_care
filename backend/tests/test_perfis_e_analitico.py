@@ -167,6 +167,18 @@ class PerfisEAnaliticoTestCase(ApiTestCase):
         self.assertIn("text/csv", res.content_type)
         self.assertTrue(res.data.decode("utf-8").lstrip("\ufeff").startswith("Registro ANS;CNPJ"))
 
+    def test_painel_escopo_por_perfil(self):
+        self._seed_analitico()
+        admin = self._auth_headers(self._login_demo())
+        res_admin = self.client.get("/api/painel?escopo=admin", headers=admin).get_json()
+        self.assertAlmostEqual(res_admin["admin"]["total_despesas"], 110.0)
+        self.assertEqual(res_admin["colaborador"]["ranking"], [])
+
+        res_colab = self.client.get("/api/painel?escopo=colaborador", headers=admin).get_json()
+        self.assertAlmostEqual(res_colab["colaborador"]["sinistralidade"], 110 / 150)
+        self.assertEqual(res_colab["admin"]["total_despesas"], 0.0)
+        self.assertEqual(res_colab["admin"]["modalidades"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -70,12 +70,33 @@ class UsuarioRepository:
             return dict(row) if row else None
 
     @staticmethod
-    def touch_ultimo_acesso(user_id: int) -> None:
+    def touch_ultimo_acesso(user_id: int) -> datetime:
+        agora = datetime.now(timezone.utc).replace(tzinfo=None)
         with get_connection() as conn:
             conn.execute(
                 text("UPDATE usuarios SET ultimo_acesso = :agora WHERE id = :id"),
-                {"agora": datetime.now(timezone.utc).replace(tzinfo=None), "id": user_id},
+                {"agora": agora, "id": user_id},
             )
+        return agora
+
+    @staticmethod
+    def find_active_session_user(token_jti: str) -> Optional[Dict[str, Any]]:
+        """Busca sessão e usuário em uma única consulta SQL para validação do token."""
+        with get_connection() as conn:
+            row = (
+                conn.execute(
+                    text(
+                        "SELECT s.revogado AS sessao_revogada, s.expira_em AS sessao_expira_em, "
+                        "u.* FROM sessoes_tokens s "
+                        "LEFT JOIN usuarios u ON u.id = s.usuario_id "
+                        "WHERE s.token_jti = :token_jti LIMIT 1"
+                    ),
+                    {"token_jti": token_jti},
+                )
+                .mappings()
+                .first()
+            )
+            return dict(row) if row else None
 
     @staticmethod
     def update_password(user_id: int, senha_hash: str) -> None:

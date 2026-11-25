@@ -46,7 +46,8 @@ def _lista(valor: Optional[str]) -> List[str]:
 class ExplorarService:
     @staticmethod
     def explorar(args: Dict[str, Any], ver_inativas: bool) -> Dict[str, Any]:
-        anos = ExplorarRepository.anos_disponiveis()
+        trimestres_mapa = ExplorarRepository.trimestres_por_ano()
+        anos = list(trimestres_mapa.keys())
         if not anos:
             raise BusinessRuleError("Ainda não há demonstrações carregadas. Rode o ETL.", 404)
 
@@ -126,12 +127,11 @@ class ExplorarService:
                 anterior = {"anos": anteriores, "ano_inicio": anteriores[0], "ano_fim": anteriores[-1], "kpis": None,
                             "serie": [], "aviso": "Não há dados para o período anterior equivalente."}
 
-        trimestres = ExplorarRepository.trimestres_por_ano()
         return {
             "periodo": {"ano_inicio": ano_inicio, "ano_fim": ano_fim, "anos": selecionados,
                         "trimestres": trimestres_sel, "granularidade": granularidade},
             "anos_disponiveis": anos,
-            "anos_parciais": [a for a in anos if trimestres.get(a, 0) < 4],
+            "anos_parciais": [a for a in anos if trimestres_mapa.get(a, 0) < 4],
             "facetas": {
                 **ExplorarRepository.facetas(),
                 "portes": list(PORTES),

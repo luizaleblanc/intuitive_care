@@ -30,6 +30,7 @@ def painel():
                 trimestres=_int_list_arg("trimestres", "trimestre"),
                 uf=request.args.get("uf", "").strip().upper(),
                 modalidade=request.args.get("modalidade", "").strip(),
+                escopo=request.args.get("escopo", "").strip().lower(),
             )
         ),
         200,

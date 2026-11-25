@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
+from backend.database.cache import invalidar_cache, obter_ou_carregar
 from backend.repositories.analitico_repository import AnaliticoRepository
 from backend.services.validators import BusinessRuleError
 
@@ -60,7 +61,7 @@ def _norm_strs(unico: Union[str, Sequence[str], None], multiplos: Optional[Seque
 def _resolver_periodos(
     anos: Sequence[int], trimestres: Sequence[int]
 ) -> Tuple[List[Periodo], List[Periodo], List[Periodo]]:
-    periodos = AnaliticoRepository.periodos()
+    periodos = obter_ou_carregar("analitico:periodos", AnaliticoRepository.periodos)
     if not periodos:
         raise BusinessRuleError("Nenhuma demonstração contábil carregada. Execute o ETL.", 404)
     if not anos and not trimestres:
@@ -74,8 +75,6 @@ def _resolver_periodos(
         ]
         if not selecionados:
             raise BusinessRuleError("Não há dados da ANS para o período selecionado.", 404)
-        # Se apenas trimestre(s) foram informados sem ano (ex.: trimestre_padrao do perfil),
-        # restringe ao ano mais recente que possui dados para esse recorte.
         if not anos_set:
             ano_recente = selecionados[0][0]
             selecionados = [p for p in selecionados if p[0] == ano_recente]
@@ -111,6 +110,34 @@ def _resumir_lotes(lotes: List[Dict[str, Any]], selecionados: List[Periodo]) -> 
     }
 
 
+def _stub_admin() -> Dict[str, Any]:
+    return {
+        "total_despesas": 0.0,
+        "total_despesas_anterior": None,
+        "registros_extraidos": 0,
+        "registros_extraidos_anterior": None,
+        "operadoras_ativas": 0,
+        "operadoras_com_demonstracao": 0,
+        "serie": [],
+        "modalidades": [],
+    }
+
+
+def _stub_colaborador() -> Dict[str, Any]:
+    return {
+        "despesas_mh": 0.0,
+        "despesas_mh_anterior": None,
+        "sinistralidade": None,
+        "sinistralidade_anterior": None,
+        "beneficiarios": 0,
+        "beneficiarios_anterior": None,
+        "ticket_medio": None,
+        "ticket_medio_anterior": None,
+        "ranking": [],
+        "serie": [],
+    }
+
+
 class AnaliticoService:
     """Indicadores do Painel e do plano de contas calculados a partir dos dados reais da ANS."""
 
@@ -122,58 +149,63 @@ class AnaliticoService:
         modalidade: Union[str, Sequence[str]] = "",
         anos: Optional[Sequence[int]] = None,
         trimestres: Optional[Sequence[int]] = None,
+        escopo: str = "",
     ) -> Dict[str, Any]:
         anos_sel = _norm_ints(ano, anos)
         tris_sel = _norm_ints(trimestre, trimestres)
         ufs = [u.upper() for u in _norm_strs(uf)]
         modalidades = _norm_strs(modalidade)
+        escopo_norm = escopo if escopo in ("admin", "colaborador") else ""
 
         selecionados, anteriores, periodos = _resolver_periodos(anos_sel, tris_sel)
         periodo = selecionados[0]
         anterior_ref = anteriores[0] if anteriores else _anterior(periodo)
         repo = AnaliticoRepository
 
-        # ---------------- visão Administrador (setor inteiro ou recorte de período)
-        atual = repo.totais_periodo(selecionados)
-        ant = repo.totais_periodo(anteriores) if anteriores else {"eventos": 0.0}
-        lotes_atual = repo.lotes(selecionados)
-        lotes_ant = repo.lotes(anteriores) if anteriores else []
-        reg_atual = sum(int(l.get("registros_extraidos") or 0) for l in lotes_atual)
-        reg_ant = sum(int(l.get("registros_extraidos") or 0) for l in lotes_ant)
-        modalidades_dist = repo.por_modalidade(selecionados)
-        total_mod = sum(m["valor"] for m in modalidades_dist) or 1
-        admin = {
-            "total_despesas": atual["eventos"],
-            "total_despesas_anterior": ant["eventos"] or None,
-            "registros_extraidos": reg_atual,
-            "registros_extraidos_anterior": reg_ant or None,
-            "operadoras_ativas": repo.operadoras_ativas(),
-            "operadoras_com_demonstracao": int(atual["operadoras"]),
-            "serie": repo.serie("eventos", ate=periodo, selecionados=selecionados),
-            "modalidades": [
-                {**m, "pct": round(m["valor"] / total_mod * 100, 1)} for m in modalidades_dist
-            ],
-        }
+        if escopo_norm != "colaborador":
+            atual, ant = repo.totais_comparados(selecionados, anteriores)
+            sel_set = set(selecionados)
+            todos_lotes = repo.lotes(selecionados + (anteriores or []))
+            reg_atual = sum(int(l.get("registros_extraidos") or 0) for l in todos_lotes if (int(l["ano"]), int(l["trimestre"])) in sel_set)
+            reg_ant = sum(int(l.get("registros_extraidos") or 0) for l in todos_lotes if (int(l["ano"]), int(l["trimestre"])) not in sel_set)
+            modalidades_dist = repo.por_modalidade(selecionados)
+            total_mod = sum(m["valor"] for m in modalidades_dist) or 1
+            admin = {
+                "total_despesas": atual["eventos"],
+                "total_despesas_anterior": ant["eventos"] or None,
+                "registros_extraidos": reg_atual,
+                "registros_extraidos_anterior": reg_ant or None,
+                "operadoras_ativas": repo.operadoras_ativas(),
+                "operadoras_com_demonstracao": int(atual["operadoras"]),
+                "serie": repo.serie("eventos", ate=periodo, selecionados=selecionados),
+                "modalidades": [
+                    {**m, "pct": round(m["valor"] / total_mod * 100, 1)} for m in modalidades_dist
+                ],
+            }
+        else:
+            admin = _stub_admin()
 
-        # ---------------- visão Colaborador (filtros UF / modalidade / múltiplos anos e trimestres)
-        c_atual = repo.totais_periodo(selecionados, ufs, modalidades)
-        c_ant = repo.totais_periodo(anteriores, ufs, modalidades) if anteriores else {"eventos_mh": 0.0}
-        sin = repo.sinistralidade_media(selecionados, ufs, modalidades)
-        sin_ant = repo.sinistralidade_media(anteriores, ufs, modalidades) if anteriores else None
-        base_benef = repo.beneficiarios_com_despesa(selecionados, ufs, modalidades)
-        base_benef_ant = repo.beneficiarios_com_despesa(anteriores, ufs, modalidades) if anteriores else 0
-        colaborador = {
-            "despesas_mh": c_atual["eventos_mh"],
-            "despesas_mh_anterior": c_ant["eventos_mh"] or None,
-            "sinistralidade": sin,
-            "sinistralidade_anterior": sin_ant,
-            "beneficiarios": repo.beneficiarios(periodo, ufs, modalidades),
-            "beneficiarios_anterior": (repo.beneficiarios(anterior_ref, ufs, modalidades) or None) if anteriores else None,
-            "ticket_medio": (c_atual["eventos_mh"] / base_benef) if base_benef else None,
-            "ticket_medio_anterior": (c_ant["eventos_mh"] / base_benef_ant) if base_benef_ant else None,
-            "ranking": repo.ranking(selecionados, ufs, modalidades),
-            "serie": repo.serie("eventos_mh", ate=periodo, uf=ufs, modalidade=modalidades, selecionados=selecionados),
-        }
+        if escopo_norm != "admin":
+            c_atual, c_ant = repo.totais_comparados(selecionados, anteriores, ufs, modalidades)
+            sin, sin_ant = repo.sinistralidades_comparadas(selecionados, anteriores, ufs, modalidades)
+            base_benef, base_benef_ant = repo.beneficiarios_despesa_comparados(selecionados, anteriores, ufs, modalidades)
+            benef_atual, benef_ant = repo.beneficiarios_comparados(
+                periodo, anterior_ref if anteriores else None, ufs, modalidades
+            )
+            colaborador = {
+                "despesas_mh": c_atual["eventos_mh"],
+                "despesas_mh_anterior": c_ant["eventos_mh"] or None,
+                "sinistralidade": sin,
+                "sinistralidade_anterior": sin_ant,
+                "beneficiarios": benef_atual,
+                "beneficiarios_anterior": (benef_ant or None) if anteriores else None,
+                "ticket_medio": (c_atual["eventos_mh"] / base_benef) if base_benef else None,
+                "ticket_medio_anterior": (c_ant["eventos_mh"] / base_benef_ant) if base_benef_ant else None,
+                "ranking": repo.ranking(selecionados, ufs, modalidades),
+                "serie": repo.serie("eventos_mh", ate=periodo, uf=ufs, modalidade=modalidades, selecionados=selecionados),
+            }
+        else:
+            colaborador = _stub_colaborador()
 
         return {
             "periodo": _p(periodo),
@@ -206,8 +238,9 @@ class AnaliticoService:
         anterior_ref = anteriores[0] if anteriores else _anterior(periodo)
 
         repo = AnaliticoRepository
-        atuais = repo.contas(selecionados, prefixos)
-        anteriores_map = repo.contas(anteriores, prefixos) if anteriores else {}
+        atuais, anteriores_map, kpi_atual, kpi_ant = repo.contas_comparadas(
+            selecionados, anteriores, prefixos, incluir_kpis=True
+        )
 
         linhas = []
         for codigo, conta in atuais.items():
@@ -223,12 +256,10 @@ class AnaliticoService:
                 }
             )
 
-        kpi_atual = repo.contas(selecionados, ["41", "43", "46"], max_nivel=0)
-        kpi_ant = repo.contas(anteriores, ["41", "43", "46"], max_nivel=0) if anteriores else {}
         kpis = {
             c: {
-                "valor_atual": kpi_atual.get(c, {}).get("valor", 0.0),
-                "valor_anterior": kpi_ant.get(c, {}).get("valor") if c in kpi_ant else None,
+                "valor_atual": kpi_atual.get(c, 0.0),
+                "valor_anterior": kpi_ant.get(c) if c in kpi_ant else None,
             }
             for c in ("41", "46", "43")
         }
@@ -277,4 +308,5 @@ class AnaliticoService:
     def auditar_lote(ano: int, trimestre: int, usuario: str) -> Dict[str, Any]:
         if not AnaliticoRepository.auditar_lote((ano, trimestre), usuario):
             raise BusinessRuleError("Lote não encontrado para o período informado.", 404)
+        invalidar_cache("explorar:", "analitico:")
         return {"mensagem": f"Lote do {trimestre}º trimestre de {ano} marcado como auditado."}

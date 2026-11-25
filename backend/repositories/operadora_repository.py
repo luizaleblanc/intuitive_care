@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import bindparam, text
 
+from backend.database.cache import obter_ou_carregar
 from backend.database.connection import get_connection
 
 # Despesa (conta 41) do trimestre mais recente carregado para cada operadora.
@@ -131,6 +132,13 @@ class OperadoraRepository:
 
     @staticmethod
     def resumo(incluir_inativas: bool = True) -> Dict[str, Any]:
+        return obter_ou_carregar(
+            f"operadoras:resumo:{int(incluir_inativas)}",
+            lambda: OperadoraRepository._carregar_resumo(incluir_inativas),
+        )
+
+    @staticmethod
+    def _carregar_resumo(incluir_inativas: bool = True) -> Dict[str, Any]:
         with get_connection() as conn:
             linha = (
                 conn.execute(
@@ -148,22 +156,14 @@ class OperadoraRepository:
                 .mappings()
                 .first()
             )
-            modalidades = [
-                r[0]
-                for r in conn.execute(
-                    text(
-                        "SELECT DISTINCT modalidade FROM operadoras WHERE modalidade IS NOT NULL "
-                        + ("" if incluir_inativas else "AND status <> 'Inativa' ")
-                        + "ORDER BY modalidade"
-                    )
-                ).all()
-            ]
-            ufs = [
-                r[0]
-                for r in conn.execute(
-                    text("SELECT DISTINCT uf FROM operadoras WHERE status <> 'Inativa' ORDER BY uf")
-                ).all()
-            ]
+            pares = conn.execute(
+                text("SELECT DISTINCT uf, modalidade, status FROM operadoras")
+            ).all()
+        modalidades = sorted({
+            r[1] for r in pares
+            if r[1] is not None and (incluir_inativas or r[2] != "Inativa")
+        })
+        ufs = sorted({r[0] for r in pares if r[0] and r[2] != "Inativa"})
         return {
             "ativas": int(linha["ativas"] or 0),
             "em_analise": int(linha["em_analise"] or 0),

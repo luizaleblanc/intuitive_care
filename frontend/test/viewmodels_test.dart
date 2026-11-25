@@ -164,6 +164,11 @@ void main() {
     expect(consultas.last['trimestre'], '1,2');
     expect(consultas.last['uf'], 'RJ,SP');
     expect(consultas.last['modalidade'], 'Autogestão,Medicina de Grupo');
+
+    await vm.carregar(escopo: 'admin');
+    expect(consultas.last['escopo'], 'admin');
+    await vm.carregar(ano: 2026);
+    expect(consultas.last['escopo'], 'admin');
   });
 
   test('OperadorasViewModel carrega lista + resumo e envia busca', () async {
@@ -196,6 +201,19 @@ void main() {
 
     await vm.carregar(modalidades: {'Medicina de Grupo', 'Autogestão'});
     expect(vm.modalidade, 'Autogestão,Medicina de Grupo');
+
+    final vmResumo = OperadorasViewModel(OperadoraRepository(OperadoraService(
+      ApiClient(
+        httpClient: MockClient((req) async {
+          expect(req.url.path, endsWith('/operadoras/resumo'));
+          return _json({'ativas': 10, 'em_analise': 1, 'inativadas_12m': 0, 'beneficiarios': 100,
+            'modalidades': ['Autogestão'], 'ufs': ['PB']});
+        }),
+      ),
+    )));
+    await vmResumo.carregarResumo();
+    expect(vmResumo.resumo.ufs, ['PB']);
+    expect(vmResumo.items, isEmpty);
   });
 
   test('ContasViewModel expõe erro 403 ao auditar lote sem permissão', () async {

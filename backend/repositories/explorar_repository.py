@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Sequence
 
 from sqlalchemy import bindparam, text
 
+from backend.database.cache import obter_ou_carregar
 from backend.database.connection import get_connection
 
 
@@ -9,29 +10,38 @@ class ExplorarRepository:
     """Consultas brutas da exploração analítica: uma linha por operadora e trimestre."""
 
     @staticmethod
-    def anos_disponiveis() -> List[int]:
-        with get_connection() as conn:
-            return [int(r[0]) for r in conn.execute(text("SELECT DISTINCT ano FROM demonstracoes_operadora ORDER BY ano"))]
-
-    @staticmethod
-    def trimestres_por_ano() -> Dict[int, int]:
+    def _carregar_trimestres_por_ano() -> Dict[int, int]:
         with get_connection() as conn:
             linhas = conn.execute(
-                text("SELECT ano, COUNT(DISTINCT trimestre) FROM demonstracoes_operadora GROUP BY ano")
+                text("SELECT ano, COUNT(DISTINCT trimestre) FROM demonstracoes_operadora GROUP BY ano ORDER BY ano")
             ).all()
         return {int(a): int(n) for a, n in linhas}
 
     @staticmethod
-    def facetas() -> Dict[str, List[str]]:
+    def trimestres_por_ano() -> Dict[int, int]:
+        return obter_ou_carregar("explorar:trimestres", ExplorarRepository._carregar_trimestres_por_ano)
+
+    @staticmethod
+    def anos_disponiveis() -> List[int]:
+        return list(ExplorarRepository.trimestres_por_ano().keys())
+
+    @staticmethod
+    def _carregar_facetas() -> Dict[str, List[str]]:
         with get_connection() as conn:
-            ufs = [r[0] for r in conn.execute(text(
-                "SELECT DISTINCT o.uf FROM operadoras o JOIN demonstracoes_operadora d ON d.reg_ans = o.registro_ans "
-                "WHERE o.uf IS NOT NULL AND o.uf <> '' ORDER BY o.uf"))]
-            modalidades = [r[0] for r in conn.execute(text(
-                "SELECT DISTINCT o.modalidade FROM operadoras o JOIN demonstracoes_operadora d "
-                "ON d.reg_ans = o.registro_ans WHERE o.modalidade IS NOT NULL AND o.modalidade <> '' "
-                "ORDER BY o.modalidade"))]
+            pares = conn.execute(
+                text(
+                    "SELECT DISTINCT o.uf, o.modalidade "
+                    "FROM operadoras o "
+                    "JOIN demonstracoes_operadora d ON d.reg_ans = o.registro_ans"
+                )
+            ).all()
+        ufs = sorted({r[0] for r in pares if r[0]})
+        modalidades = sorted({r[1] for r in pares if r[1]})
         return {"ufs": ufs, "modalidades": modalidades}
+
+    @staticmethod
+    def facetas() -> Dict[str, List[str]]:
+        return obter_ou_carregar("explorar:facetas", ExplorarRepository._carregar_facetas)
 
     @staticmethod
     def linhas(

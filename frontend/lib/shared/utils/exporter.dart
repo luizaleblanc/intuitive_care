@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'browser.dart';
 import 'export/csv_exporter.dart';
 import 'export/export_table.dart';
-import 'export/pdf_exporter.dart';
+import 'export/pdf_exporter.dart' deferred as pdf_exporter;
 import 'export/xlsx_exporter.dart';
 
 export 'browser.dart' show abrirNovaAba;
@@ -24,7 +24,7 @@ class Exporter {
   /// Exporta uma única tabela no formato indicado (`CSV`, `XLSX` ou `PDF`) e inicia o download.
   static Future<String> exportar(ExportTable tabela, {required String nomeBase, String formato = 'CSV'}) async {
     final (bytes, mime, ext) = switch (formato.toUpperCase()) {
-      'PDF' => (await gerarPdf(tabela), mimePdf, 'pdf'),
+      'PDF' => await _pdfTabela(tabela),
       'XLSX' => (gerarXlsx(tabela), mimeXlsx, 'xlsx'),
       _ => (gerarCsv(tabela), mimeCsv, 'csv'),
     };
@@ -41,11 +41,29 @@ class Exporter {
   }) async {
     assert(abas.isNotEmpty);
     final (bytes, mime, ext) = switch (formato.toUpperCase()) {
-      'PDF' => (await gerarPdfMulti(abas, tituloGeral: tituloGeral, subtituloGeral: subtituloGeral), mimePdf, 'pdf'),
+      'PDF' => await _pdfRelatorio(abas, tituloGeral: tituloGeral, subtituloGeral: subtituloGeral),
       'CSV' => (gerarCsvMulti(abas, tituloGeral: tituloGeral, subtituloGeral: subtituloGeral), mimeCsv, 'csv'),
       _ => (gerarXlsxMulti(abas), mimeXlsx, 'xlsx'),
     };
     return salvarBytes(bytes, '$nomeBase.$ext', mime);
+  }
+
+  static Future<(Uint8List, String, String)> _pdfTabela(ExportTable tabela) async {
+    await pdf_exporter.loadLibrary();
+    return (await pdf_exporter.gerarPdf(tabela), mimePdf, 'pdf');
+  }
+
+  static Future<(Uint8List, String, String)> _pdfRelatorio(
+    List<ExportTable> abas, {
+    String? tituloGeral,
+    String? subtituloGeral,
+  }) async {
+    await pdf_exporter.loadLibrary();
+    return (
+      await pdf_exporter.gerarPdfMulti(abas, tituloGeral: tituloGeral, subtituloGeral: subtituloGeral),
+      mimePdf,
+      'pdf',
+    );
   }
 
   /// Gera os bytes `.xlsx` multi-aba estilizados (útil também para testes unitários).

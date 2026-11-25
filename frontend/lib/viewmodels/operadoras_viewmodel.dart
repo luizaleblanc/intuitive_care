@@ -42,6 +42,17 @@ class OperadorasViewModel extends ChangeNotifier {
     _error = null;
   }
 
+  /// Carrega apenas os metadados de filtro (UFs e modalidades) sem consultar a tabela paginada.
+  Future<void> carregarResumo() async {
+    if (_resumo.ufs.isNotEmpty) return;
+    try {
+      _resumo = await _repository.resumo();
+      notifyListeners();
+    } on ApiException {
+      // Filtros do painel permanecem funcionais mesmo sem o resumo auxiliar.
+    }
+  }
+
   Future<void> carregar({
     String? search,
     String? modalidade,

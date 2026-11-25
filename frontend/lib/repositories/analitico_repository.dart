@@ -19,6 +19,7 @@ class AnaliticoRepository {
     Iterable<int>? trimestres,
     Iterable<String>? ufs,
     Iterable<String>? modalidades,
+    String? escopo,
   }) async =>
       PainelModel.fromJson(await _service.fetchPainel(
         ano: ano,
@@ -29,6 +30,7 @@ class AnaliticoRepository {
         trimestres: trimestres,
         ufs: ufs,
         modalidades: modalidades,
+        escopo: escopo,
       ));
 
   Future<ContasModel> contas({

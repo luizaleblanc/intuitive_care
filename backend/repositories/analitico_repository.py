@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from sqlalchemy import text
 
@@ -13,6 +13,37 @@ from backend.repositories.analitico_sql_helpers import (
     _preparar_filtros,
 )
 from backend.repositories.contas_repository import ContasRepository
+
+_TOTAIS_ZEROS = {
+    "eventos": 0.0,
+    "eventos_mh": 0.0,
+    "contraprestacoes": 0.0,
+    "comercializacao": 0.0,
+    "administrativas": 0.0,
+    "operadoras": 0.0,
+}
+
+
+def _condicoes_duplas(
+    atual: PeriodoInput,
+    anterior: PeriodoInput,
+    uf: Union[str, Sequence[str]],
+    modalidade: Union[str, Sequence[str]],
+    alias: str,
+) -> Optional[Tuple[str, str, str, Dict[str, Any], List[str]]]:
+    p_atual = _norm_periodos(atual)
+    if not p_atual:
+        return None
+    p_ant = _norm_periodos(anterior)
+    cond_a, params_a = _filtro_periodos(p_atual, alias, prefixo_param="pa")
+    if p_ant:
+        cond_b, params_b = _filtro_periodos(p_ant, alias, prefixo_param="pb")
+        cond_ab = f"({cond_a} OR {cond_b})"
+    else:
+        cond_b, params_b = "1=0", {}
+        cond_ab = cond_a
+    filtro, params_f, expanding = _filtro_operadora(uf, modalidade)
+    return cond_a, cond_b, f"{cond_ab}{filtro}", {**params_a, **params_b, **params_f}, expanding
 
 
 class AnaliticoRepository:
@@ -37,32 +68,47 @@ class AnaliticoRepository:
         modalidade: Union[str, Sequence[str]] = "",
     ) -> Dict[str, float]:
         """Soma despesas, receitas e operadoras distintas no recorte informado."""
-        filtros = _preparar_filtros(periodo, uf, modalidade, "d")
-        if not filtros:
-            return {
-                "eventos": 0.0,
-                "eventos_mh": 0.0,
-                "contraprestacoes": 0.0,
-                "comercializacao": 0.0,
-                "administrativas": 0.0,
-                "operadoras": 0.0,
-            }
-        cond_p, filtro, params, expanding = filtros
+        atual, _ = AnaliticoRepository.totais_comparados(periodo, (), uf, modalidade)
+        return atual
+
+    @staticmethod
+    def totais_comparados(
+        atual: PeriodoInput,
+        anterior: PeriodoInput,
+        uf: Union[str, Sequence[str]] = "",
+        modalidade: Union[str, Sequence[str]] = "",
+    ) -> Tuple[Dict[str, float], Dict[str, float]]:
+        """Calcula somatórios dos períodos atual e anterior em uma única query SQL."""
+        comp = _condicoes_duplas(atual, anterior, uf, modalidade, "d")
+        if not comp:
+            return dict(_TOTAIS_ZEROS), dict(_TOTAIS_ZEROS)
+        cond_a, cond_b, where_sql, params, expanding = comp
         stmt = _bind_expanding(
-            "SELECT COALESCE(SUM(d.eventos), 0) AS eventos, "
-            "COALESCE(SUM(d.eventos_mh), 0) AS eventos_mh, "
-            "COALESCE(SUM(d.contraprestacoes), 0) AS contraprestacoes, "
-            "COALESCE(SUM(d.comercializacao), 0) AS comercializacao, "
-            "COALESCE(SUM(d.administrativas), 0) AS administrativas, "
-            "COUNT(DISTINCT d.reg_ans) AS operadoras "
+            "SELECT "
+            f"COALESCE(SUM(CASE WHEN {cond_a} THEN d.eventos ELSE 0 END), 0) AS a_eventos, "
+            f"COALESCE(SUM(CASE WHEN {cond_a} THEN d.eventos_mh ELSE 0 END), 0) AS a_eventos_mh, "
+            f"COALESCE(SUM(CASE WHEN {cond_a} THEN d.contraprestacoes ELSE 0 END), 0) AS a_contraprestacoes, "
+            f"COALESCE(SUM(CASE WHEN {cond_a} THEN d.comercializacao ELSE 0 END), 0) AS a_comercializacao, "
+            f"COALESCE(SUM(CASE WHEN {cond_a} THEN d.administrativas ELSE 0 END), 0) AS a_administrativas, "
+            f"COUNT(DISTINCT CASE WHEN {cond_a} THEN d.reg_ans END) AS a_operadoras, "
+            f"COALESCE(SUM(CASE WHEN {cond_b} THEN d.eventos ELSE 0 END), 0) AS b_eventos, "
+            f"COALESCE(SUM(CASE WHEN {cond_b} THEN d.eventos_mh ELSE 0 END), 0) AS b_eventos_mh, "
+            f"COALESCE(SUM(CASE WHEN {cond_b} THEN d.contraprestacoes ELSE 0 END), 0) AS b_contraprestacoes, "
+            f"COALESCE(SUM(CASE WHEN {cond_b} THEN d.comercializacao ELSE 0 END), 0) AS b_comercializacao, "
+            f"COALESCE(SUM(CASE WHEN {cond_b} THEN d.administrativas ELSE 0 END), 0) AS b_administrativas, "
+            f"COUNT(DISTINCT CASE WHEN {cond_b} THEN d.reg_ans END) AS b_operadoras "
             "FROM demonstracoes_operadora d "
             "JOIN operadoras o ON o.registro_ans = d.reg_ans "
-            f"WHERE {cond_p}{filtro}",
+            f"WHERE {where_sql}",
             expanding,
         )
         with get_connection() as conn:
             r = conn.execute(stmt, params).mappings().first()
-            return {k: float(r[k] or 0) for k in r.keys()}
+        keys = tuple(_TOTAIS_ZEROS.keys())
+        return (
+            {k: float(r[f"a_{k}"] or 0) for k in keys},
+            {k: float(r[f"b_{k}"] or 0) for k in keys},
+        )
 
     @staticmethod
     def sinistralidade_media(
@@ -71,20 +117,37 @@ class AnaliticoRepository:
         modalidade: Union[str, Sequence[str]] = "",
     ) -> Optional[float]:
         """Média simples da sinistralidade por operadora (eventos / contraprestações)."""
-        filtros = _preparar_filtros(periodo, uf, modalidade, "d")
-        if not filtros:
-            return None
-        cond_p, filtro, params, expanding = filtros
+        atual, _ = AnaliticoRepository.sinistralidades_comparadas(periodo, (), uf, modalidade)
+        return atual
+
+    @staticmethod
+    def sinistralidades_comparadas(
+        atual: PeriodoInput,
+        anterior: PeriodoInput,
+        uf: Union[str, Sequence[str]] = "",
+        modalidade: Union[str, Sequence[str]] = "",
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """Calcula sinistralidade média dos períodos atual e anterior em 1 query."""
+        comp = _condicoes_duplas(atual, anterior, uf, modalidade, "d")
+        if not comp:
+            return None, None
+        cond_a, cond_b, where_sql, params, expanding = comp
         stmt = _bind_expanding(
-            "SELECT AVG(d.eventos * 1.0 / d.contraprestacoes) FROM demonstracoes_operadora d "
+            "SELECT "
+            f"AVG(CASE WHEN {cond_a} THEN d.eventos * 1.0 / d.contraprestacoes END) AS atual, "
+            f"AVG(CASE WHEN {cond_b} THEN d.eventos * 1.0 / d.contraprestacoes END) AS anterior "
+            "FROM demonstracoes_operadora d "
             "JOIN operadoras o ON o.registro_ans = d.reg_ans "
-            f"WHERE {cond_p} AND d.contraprestacoes > 0 "
-            f"AND d.eventos > 0 AND d.eventos * 1.0 / d.contraprestacoes BETWEEN 0 AND 3{filtro}",
+            f"WHERE d.contraprestacoes > 0 AND d.eventos > 0 "
+            f"AND d.eventos * 1.0 / d.contraprestacoes BETWEEN 0 AND 3 AND {where_sql}",
             expanding,
         )
         with get_connection() as conn:
-            valor = conn.execute(stmt, params).scalar()
-            return float(valor) if valor is not None else None
+            r = conn.execute(stmt, params).mappings().first()
+        return (
+            float(r["atual"]) if r["atual"] is not None else None,
+            float(r["anterior"]) if r["anterior"] is not None else None,
+        )
 
     @staticmethod
     def beneficiarios(
@@ -93,17 +156,34 @@ class AnaliticoRepository:
         modalidade: Union[str, Sequence[str]] = "",
     ) -> int:
         """Beneficiários médico-hospitalares no mês de fechamento do trimestre."""
-        filtro, params, expanding = _filtro_operadora(uf, modalidade)
-        params.update({"ano": periodo[0], "tri": periodo[1]})
+        atual, _ = AnaliticoRepository.beneficiarios_comparados(periodo, None, uf, modalidade)
+        return atual
+
+    @staticmethod
+    def beneficiarios_comparados(
+        periodo_atual: Periodo,
+        periodo_anterior: Optional[Periodo],
+        uf: Union[str, Sequence[str]] = "",
+        modalidade: Union[str, Sequence[str]] = "",
+    ) -> Tuple[int, int]:
+        """Soma beneficiários médico-hospitalares dos períodos atual e anterior em 1 query."""
+        anteriores = [periodo_anterior] if periodo_anterior else []
+        comp = _condicoes_duplas([periodo_atual], anteriores, uf, modalidade, "b")
+        if not comp:
+            return 0, 0
+        cond_a, cond_b, where_sql, params, expanding = comp
         stmt = _bind_expanding(
-            "SELECT COALESCE(SUM(b.medico_hospitalar), 0) FROM beneficiarios_trimestre b "
+            "SELECT "
+            f"COALESCE(SUM(CASE WHEN {cond_a} THEN b.medico_hospitalar ELSE 0 END), 0) AS atual, "
+            f"COALESCE(SUM(CASE WHEN {cond_b} THEN b.medico_hospitalar ELSE 0 END), 0) AS anterior "
+            "FROM beneficiarios_trimestre b "
             "JOIN operadoras o ON o.registro_ans = b.reg_ans "
-            f"WHERE b.ano = :ano AND b.trimestre = :tri{filtro}",
+            f"WHERE {where_sql}",
             expanding,
         )
         with get_connection() as conn:
-            valor = conn.execute(stmt, params).scalar()
-            return int(valor or 0)
+            r = conn.execute(stmt, params).mappings().first()
+        return int(r["atual"] or 0), int(r["anterior"] or 0)
 
     @staticmethod
     def beneficiarios_com_despesa(
@@ -112,21 +192,35 @@ class AnaliticoRepository:
         modalidade: Union[str, Sequence[str]] = "",
     ) -> int:
         """Beneficiários médico-hospitalares das operadoras com despesa no período (base do ticket médio)."""
-        filtros = _preparar_filtros(periodo, uf, modalidade, "b")
-        if not filtros:
-            return 0
-        cond_p, filtro, params, expanding = filtros
+        atual, _ = AnaliticoRepository.beneficiarios_despesa_comparados(periodo, (), uf, modalidade)
+        return atual
+
+    @staticmethod
+    def beneficiarios_despesa_comparados(
+        atual: PeriodoInput,
+        anterior: PeriodoInput,
+        uf: Union[str, Sequence[str]] = "",
+        modalidade: Union[str, Sequence[str]] = "",
+    ) -> Tuple[int, int]:
+        """Calcula base de beneficiários com despesa atual e anterior em 1 query."""
+        comp = _condicoes_duplas(atual, anterior, uf, modalidade, "b")
+        if not comp:
+            return 0, 0
+        cond_a, cond_b, where_sql, params, expanding = comp
         stmt = _bind_expanding(
-            "SELECT COALESCE(SUM(b.medico_hospitalar), 0) FROM beneficiarios_trimestre b "
+            "SELECT "
+            f"COALESCE(SUM(CASE WHEN {cond_a} THEN b.medico_hospitalar ELSE 0 END), 0) AS atual, "
+            f"COALESCE(SUM(CASE WHEN {cond_b} THEN b.medico_hospitalar ELSE 0 END), 0) AS anterior "
+            "FROM beneficiarios_trimestre b "
             "JOIN operadoras o ON o.registro_ans = b.reg_ans "
             "JOIN demonstracoes_operadora d ON d.reg_ans = b.reg_ans "
             "  AND d.ano = b.ano AND d.trimestre = b.trimestre "
-            f"WHERE {cond_p} AND d.eventos_mh > 0{filtro}",
+            f"WHERE d.eventos_mh > 0 AND {where_sql}",
             expanding,
         )
         with get_connection() as conn:
-            valor = conn.execute(stmt, params).scalar()
-            return int(valor or 0)
+            r = conn.execute(stmt, params).mappings().first()
+        return int(r["atual"] or 0), int(r["anterior"] or 0)
 
     @staticmethod
     def serie(
@@ -221,6 +315,16 @@ class AnaliticoRepository:
     def contas(periodo: PeriodoInput, prefixos: List[str], max_nivel: int = 2) -> Dict[str, Dict[str, Any]]:
         """Delega consulta de contas do setor para `ContasRepository`."""
         return ContasRepository.contas(periodo, prefixos, max_nivel=max_nivel)
+
+    @staticmethod
+    def contas_comparadas(
+        atual: PeriodoInput,
+        anterior: PeriodoInput,
+        prefixos: List[str],
+        incluir_kpis: bool = True,
+    ):
+        """Delega consulta consolidada de contas e KPIs para `ContasRepository`."""
+        return ContasRepository.contas_comparadas(atual, anterior, prefixos, incluir_kpis=incluir_kpis)
 
     @staticmethod
     def composicao_mh(periodo: PeriodoInput) -> Dict[str, float]:

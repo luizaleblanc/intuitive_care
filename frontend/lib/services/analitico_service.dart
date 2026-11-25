@@ -17,6 +17,7 @@ class AnaliticoService {
     Iterable<int>? trimestres,
     Iterable<String>? ufs,
     Iterable<String>? modalidades,
+    String? escopo,
   }) async {
     final anosList = anos?.toList() ?? (ano != null ? [ano] : <int>[]);
     final trisList = trimestres?.toList() ?? (trimestre != null ? [trimestre] : <int>[]);
@@ -27,6 +28,7 @@ class AnaliticoService {
       'trimestre': trisList.join(','),
       'uf': ufsList.join(','),
       'modalidade': modsList.join(','),
+      if (escopo != null && escopo.isNotEmpty) 'escopo': escopo,
     }) as Map);
   }
 

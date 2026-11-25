@@ -24,16 +24,17 @@ def _norm_lista(valor: Union[str, Sequence[str], None], upper: bool = False) -> 
     return list(dict.fromkeys(itens))
 
 
-def _filtro_periodos(periodos: List[Periodo], alias: str = "d") -> Tuple[str, Dict[str, Any]]:
+def _filtro_periodos(periodos: List[Periodo], alias: str = "d", prefixo_param: str = "p") -> Tuple[str, Dict[str, Any]]:
     """Constrói cláusula SQL parametrizada combinando pares `(ano, trimestre)` com OR."""
     if not periodos:
         return "1=0", {}
     prefixo = f"{alias}." if alias else ""
     partes, params = [], {}
     for i, (ano, tri) in enumerate(periodos):
-        partes.append(f"({prefixo}ano = :pa{i} AND {prefixo}trimestre = :pt{i})")
-        params[f"pa{i}"] = ano
-        params[f"pt{i}"] = tri
+        ka, kt = f"{prefixo_param}a{i}", f"{prefixo_param}t{i}"
+        partes.append(f"({prefixo}ano = :{ka} AND {prefixo}trimestre = :{kt})")
+        params[ka] = ano
+        params[kt] = tri
     return "(" + " OR ".join(partes) + ")", params
 
 

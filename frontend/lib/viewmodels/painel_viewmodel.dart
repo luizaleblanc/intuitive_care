@@ -18,6 +18,7 @@ class PainelViewModel extends ChangeNotifier {
   Set<String> _ufs = {};
   Set<String> _modalidades = {};
   bool _preferenciasAplicadas = false;
+  String? _escopo;
 
   PainelModel? get painel => _painel;
   bool get isLoading => _isLoading;
@@ -80,6 +81,7 @@ class PainelViewModel extends ChangeNotifier {
     _ufs = {};
     _modalidades = {};
     _preferenciasAplicadas = false;
+    _escopo = null;
     _error = null;
   }
 
@@ -92,7 +94,9 @@ class PainelViewModel extends ChangeNotifier {
     Set<int>? trimestres,
     Set<String>? ufs,
     Set<String>? modalidades,
+    String? escopo,
   }) async {
+    if (escopo != null) _escopo = escopo;
     if (anos != null) {
       _anos = Set<int>.from(anos);
       final tris = trimestresDosAnos(_anos);
@@ -131,6 +135,7 @@ class PainelViewModel extends ChangeNotifier {
         trimestres: _trimestres.toList()..sort(),
         ufs: _ufs.toList()..sort(),
         modalidades: _modalidades.toList()..sort(),
+        escopo: _escopo,
       );
       _anos = _painel!.periodosSelecionados.map((p) => p.ano).toSet();
       _trimestres = _painel!.periodosSelecionados.map((p) => p.trimestre).toSet();

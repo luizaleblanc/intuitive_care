@@ -1,5 +1,6 @@
 from typing import Any, Dict
 
+from backend.database.cache import invalidar_cache
 from backend.models.operadora_model import STATUS_VALIDOS, Operadora
 from backend.repositories.operadora_repository import OperadoraRepository
 from backend.services.validators import (
@@ -94,6 +95,7 @@ class OperadoraService:
         campos: Dict[str, Any] = {"status": status}
         campos["data_descredenciamento"] = date.today() if status == "Inativa" else None
         updated = OperadoraRepository.update(str(existing["registro_ans"]), campos)
+        invalidar_cache("operadoras:", "explorar:", "analitico:")
         verbo = "inativada" if status == "Inativa" else ("reativada" if status == "Ativa" else "colocada em análise")
         return {"mensagem": f"Operadora {verbo} com sucesso.", "data": Operadora.from_row(updated).to_dict()}
 
@@ -170,6 +172,7 @@ class OperadoraService:
             )
 
         created = OperadoraRepository.create(payload)
+        invalidar_cache("operadoras:", "explorar:", "analitico:")
         return {
             "mensagem": "Operadora cadastrada com sucesso.",
             "data": Operadora.from_row(created).to_dict(),
@@ -194,6 +197,7 @@ class OperadoraService:
         updated = OperadoraRepository.update(registro_ans, payload)
         if not updated:
             raise BusinessRuleError("Operadora não encontrada.", 404)
+        invalidar_cache("operadoras:", "explorar:", "analitico:")
 
         return {
             "mensagem": "Operadora atualizada com sucesso.",
@@ -218,4 +222,5 @@ class OperadoraService:
             )
 
         OperadoraRepository.delete(registro_ans, cascade_despesas=force)
+        invalidar_cache("operadoras:", "explorar:", "analitico:")
         return {"mensagem": "Operadora excluída com sucesso."}

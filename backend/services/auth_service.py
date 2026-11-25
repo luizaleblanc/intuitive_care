@@ -126,8 +126,8 @@ class AuthService:
         if not bool(user_row.get("ativo", 1)):
             raise BusinessRuleError("Conta de usuário desativada.", 403)
 
-        UsuarioRepository.touch_ultimo_acesso(user_row["id"])
-        user = Usuario.from_row(UsuarioRepository.find_by_id(user_row["id"]) or user_row)
+        user_row["ultimo_acesso"] = UsuarioRepository.touch_ultimo_acesso(user_row["id"])
+        user = Usuario.from_row(user_row)
         return cls._emitir_sessao(user, "Autenticação realizada com sucesso.")
 
     @staticmethod

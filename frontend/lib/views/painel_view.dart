@@ -35,11 +35,10 @@ class _PainelViewState extends State<PainelView> {
           isAdmin: user.isAdmin,
         );
         if (!user.isAdmin) {
-          final ops = context.read<OperadorasViewModel>();
-          if (ops.resumo.ufs.isEmpty) ops.carregar(resumo: true);
+          context.read<OperadorasViewModel>().carregarResumo();
         }
       }
-      vm.carregar();
+      vm.carregar(escopo: user == null ? null : (user.isAdmin ? 'admin' : 'colaborador'));
       context.read<ShellActions>().registrarExportacao(_exportar);
     });
   }

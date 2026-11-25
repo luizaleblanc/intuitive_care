@@ -86,15 +86,22 @@ def decode_jwt(token: str) -> Dict[str, Any]:
 
 
 def verify_token(token: str) -> Dict[str, Any]:
-    """Verifica o JWT, confirma sessão ativa no banco e carrega o usuário ativo."""
+    """Verifica o JWT, confirma sessão ativa no banco e carrega o usuário ativo em 1 consulta."""
     payload = decode_jwt(token)
 
     jti = payload.get("jti")
-    if not jti or not UsuarioRepository.is_session_active(jti):
+    row = UsuarioRepository.find_active_session_user(jti) if jti else None
+    if not row or bool(row.get("sessao_revogada")):
         raise BusinessRuleError("Sessão encerrada ou revogada. Faça login novamente.", 401)
 
-    user_row = UsuarioRepository.find_by_id(int(payload["sub"]))
-    if not user_row or not bool(user_row.get("ativo", 1)):
+    expira_em = row.get("sessao_expira_em")
+    if isinstance(expira_em, str):
+        expira_em = datetime.fromisoformat(expira_em)
+    if not expira_em or expira_em <= utc_now():
+        raise BusinessRuleError("Sessão encerrada ou revogada. Faça login novamente.", 401)
+
+    user_data = {k: v for k, v in row.items() if k not in ("sessao_revogada", "sessao_expira_em")}
+    if user_data.get("id") is None or int(user_data["id"]) != int(payload["sub"]) or not bool(user_data.get("ativo", 1)):
         raise BusinessRuleError("Usuário inativo ou não encontrado.", 401)
 
-    return {"user": Usuario.from_row(user_row), "jti": jti, "payload": payload}
+    return {"user": Usuario.from_row(user_data), "jti": jti, "payload": payload}
